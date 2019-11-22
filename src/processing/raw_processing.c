@@ -6,6 +6,10 @@
 #include <pthread.h>
 #include "blur_threaded.h"
 
+#ifdef __SSE2__
+  #include <emmintrin.h>
+#endif
+
 #include "raw_processing.h"
 #include "../mlv/video_mlv.h"
 #include "filter/filter.h"
@@ -14,6 +18,8 @@
 #include "interpolation/spline_helper.h"
 #include "interpolation/cosine_interpolation.h"
 #include "rbfilter/rbf_wrapper.h"
+#include "sobel/sobel.h"
+#include "cafilter/ColorAberrationCorrection.h"
 
 /* Matrix functions which are useful */
 #include "../matrix/matrix.h"
@@ -145,7 +151,7 @@ processingObject_t * initProcessingObject()
     processingSetRbfDenoiserChroma(processing, 0);
     processingSetRbfDenoiserRange(processing, 40);
     processingUseCamMatrix(processing);
-    processingDontAllowCreativeAdjustments(processing);
+    processingAllowCreativeAdjustments(processing);
     processingSetGCurve(processing, 0, NULL, NULL, 0);
     processingSetGCurve(processing, 0, NULL, NULL, 1);
     processingSetGCurve(processing, 0, NULL, NULL, 2);
@@ -153,7 +159,16 @@ processingObject_t * initProcessingObject()
     processingSetHueVsCurves(processing, 0, NULL, NULL, 0);
     processingSetHueVsCurves(processing, 0, NULL, NULL, 1);
     processingSetHueVsCurves(processing, 0, NULL, NULL, 2);
+    processingSetHueVsCurves(processing, 0, NULL, NULL, 3);
     processingSetVignetteStrength(processing, 0);
+
+    /* Colour default parameters */
+    processingSetGamut(processing, GAMUT_Rec709);
+    processingSetTonemappingFunction(processing, TONEMAP_Reinhard);
+    processingSetGamma(processing, 3.15);
+    processingSetGammaGradient(processing, 3.15);
+    processingUseCamMatrix(processing);
+    processingSetImageProfile(processing, PROFILE_TONEMAPPED);
 
     /* Just in case (should be done tho already) */
     processing_update_matrices(processing);
@@ -161,36 +176,61 @@ processingObject_t * initProcessingObject()
     processing_update_shadow_highlight_curve(processing);
 
     processingSetToning(processing, 255, 192, 0, 0);
+    processingSetCaDesaturate(processing, 0);
+    processingSetCaRadius(processing, 1);
 
     return processing;
 }
 
+
+void processingSetGamut(processingObject_t * processing, int gamut)
+{
+    processing->colour_gamut = gamut;
+    /* This will update everything necessary to enable tonemapping */
+    processingSetWhiteBalance(processing, processingGetWhiteBalanceKelvin(processing), processingGetWhiteBalanceTint(processing));
+    processingSetGamma(processing, processing->gamma_power);
+    processingSetGammaGradient(processing, processing->gamma_power);
+    processing_update_matrices(processing);
+    processing_update_matrices_gradient(processing);
+}
+
+int processingGetGamut(processingObject_t * processing)
+{
+    return processing->colour_gamut;
+}
+
+void processingSetTonemappingFunction(processingObject_t * processing, int function)
+{
+    processing->tonemap_function = function;
+    /* This will update everything necessary to enable tonemapping */
+    processingSetGamma(processing, processing->gamma_power);
+    processingSetGammaGradient(processing, processing->gamma_power);
+    processing_update_matrices(processing);
+    processing_update_matrices_gradient(processing);
+}
+
+int processingGetTonemappingFunction(processingObject_t * processing)
+{
+    return processing->tonemap_function;
+}
+
 void processingSetImageProfile(processingObject_t * processing, int imageProfile)
 {
-    if (imageProfile >= 0 && imageProfile <= 9)
-    {
-        processingSetCustomImageProfile(processing, &default_image_profiles[imageProfile]);
-    }
-    else return;
+    /* Yes, we still have compatibility with old profile system */
+    processingGetAllowedCreativeAdjustments(processing) = default_image_profiles[imageProfile].allow_creative_adjustments;
+    processingSetGamma(processing, default_image_profiles[imageProfile].gamma_power);
+    processingSetTonemappingFunction(processing, default_image_profiles[imageProfile].tonemap_function);
+    processingSetGamut(processing, default_image_profiles[imageProfile].colour_gamut);
+
+    /* This updates matrices, so new gamut will be put to use */
+    processingSetWhiteBalance(processing, processingGetWhiteBalanceKelvin(processing), processingGetWhiteBalanceTint(processing));
+
+    /* This will update everything necessary to enable tonemapping */
+    processingSetGamma(processing, processing->gamma_power);
+    processingSetGammaGradient(processing, processing->gamma_power);
+    processing_update_matrices(processing);
+    processing_update_matrices_gradient(processing);
 }
-
-
-/* Image profile strruct needed */
-void processingSetCustomImageProfile(processingObject_t * processing, image_profile_t * imageProfile)
-{
-    processing->image_profile = imageProfile;
-    processing->use_rgb_curves = imageProfile->disable_settings.curves;
-    processing->use_saturation = imageProfile->disable_settings.saturation;
-    processingSetGamma(processing, imageProfile->gamma_power);
-    if( processing->gradient_enable != 0 ) processingSetGammaGradient(processing, imageProfile->gamma_power);
-    if (imageProfile->disable_settings.tonemapping)
-    {
-        processing->tone_mapping_function = imageProfile->tone_mapping_function;
-        processing_enable_tonemapping(processing);
-    }
-    else processing_disable_tonemapping(processing);
-}
-
 
 /* Takes those matrices I learned about on the forum */
 void processingSetCamMatrix(processingObject_t * processing, double * camMatrix, double * camMatrixA)
@@ -475,7 +515,15 @@ void applyProcessingObject( processingObject_t * processing,
         }
         convert_YCbCr_to_rgb_omp(outputImage, img_s, processing->cs_zone.pre_calc_YCbCr_to_rgb);
     }
-
+    /* RGB CA&ColorMoiree Removal */
+    if( processing->ca_desaturate > 0 )
+    {
+        int img_s = imageX * imageY * 3;
+        memcpy( inputImage, outputImage, img_s * sizeof(uint16_t) );
+        CACorrection(imageX, imageY, inputImage, outputImage,
+                     (uint16_t)(100-processing->ca_desaturate)<<9,
+                     processing->ca_radius);
+    }
     /* Grain (simple monochrome noise) generator - must be applied after denoiser */
     if( processing->grainStrength > 0 ) //Switch on/off
     {
@@ -513,6 +561,9 @@ void apply_processing_object( processingObject_t * processing,
     float * vm = vignetteMask;
     float * vmpix = vm;
 
+    /* In case of camera matrix */
+    double (* tone_mapping_function)(double) = tonemap_functions[processing->tonemap_function];
+
     /* Apply some precalcuolated settings */
     for (int i = 0; i < img_s; ++i)
     {
@@ -536,54 +587,57 @@ void apply_processing_object( processingObject_t * processing,
             }
         }
 
-        /* shadows & highlights, clarity part 1 */
-        if( ( processing->shadows_highlights.shadows    <= -0.01 || processing->shadows_highlights.shadows    >= 0.01 )
-         || ( processing->shadows_highlights.highlights <= -0.01 || processing->shadows_highlights.highlights >= 0.01 )
-         || ( processing->clarity                       <= -0.01 || processing->clarity                       >= 0.01 ) )
+        if (processing->allow_creative_adjustments)
         {
-            /* Blur pixLZ */
-            int32_t bval = ( ((pm[0][bpix[0]] /* + pm[1][bpix[1]] + pm[2][bpix[2]] */) << 2)
-                           + ((/* pm[3][bpix[0]] + */ pm[4][bpix[1]] /* + pm[5][bpix[2]] */) * 11)
-                           +  (/* pm[6][bpix[0]] + pm[7][bpix[1]] + */ pm[8][bpix[2]]) ) >> 4;
+            /* shadows & highlights, clarity part 1 */
+            if( ( processing->shadows_highlights.shadows    <= -0.01 || processing->shadows_highlights.shadows    >= 0.01 )
+            || ( processing->shadows_highlights.highlights <= -0.01 || processing->shadows_highlights.highlights >= 0.01 )
+            || ( processing->clarity                       <= -0.01 || processing->clarity                       >= 0.01 ) )
+            {
+                /* Blur pixLZ */
+                int32_t bval = ( ((pm[0][bpix[0]] /* + pm[1][bpix[1]] + pm[2][bpix[2]] */) << 2)
+                            + ((/* pm[3][bpix[0]] + */ pm[4][bpix[1]] /* + pm[5][bpix[2]] */) * 11)
+                            +  (/* pm[6][bpix[0]] + pm[7][bpix[1]] + */ pm[8][bpix[2]]) ) >> 4;
 
-            if( processing->clarity <= -0.01 || processing->clarity >= 0.01 )
-            {
-                /* clarity part 1 */
-                double factor = processing->clarity_curve[LIMIT16(bval)];
-                expo_correction /= (factor * factor);
+                if( processing->clarity <= -0.01 || processing->clarity >= 0.01 )
+                {
+                    /* clarity part 1 */
+                    double factor = processing->clarity_curve[LIMIT16(bval)];
+                    expo_correction /= (factor * factor);
+                }
+                if( ( processing->shadows_highlights.shadows <= -0.01 || processing->shadows_highlights.shadows >= 0.01 )
+                || ( processing->shadows_highlights.highlights <= -0.01 || processing->shadows_highlights.highlights >= 0.01 ) )
+                {
+                    /* highlight exposure factor */
+                    expo_correction *= processing->shadows_highlights.shadow_highlight_curve[LIMIT16(bval)];
+                }
             }
-            if( ( processing->shadows_highlights.shadows <= -0.01 || processing->shadows_highlights.shadows >= 0.01 )
-             || ( processing->shadows_highlights.highlights <= -0.01 || processing->shadows_highlights.highlights >= 0.01 ) )
-            {
-                /* highlight exposure factor */
-                expo_correction *= processing->shadows_highlights.shadow_highlight_curve[LIMIT16(bval)];
-            }
-        }
 
-        /* Contrast on untouched pixel */
-        if( ( processing->contrast          <= -0.01 || processing->contrast          >= 0.01 )
-         || ( processing->clarity           <= -0.01 || processing->clarity           >= 0.01 )
-         || ( processing->gradient_contrast <= -0.01 || processing->gradient_contrast >= 0.01 ) )
-        {
-            int32_t cval = ( ((pm[0][pix[0]] /* + pm[1][pix[1]] + pm[2][pix[2]] */) << 2)
-                           + ((/* pm[3][pix[0]] + */ pm[4][pix[1]] /* + pm[5][pix[2]] */) * 11)
-                           +  (/* pm[6][pix[0]] + pm[7][pix[1]] + */ pm[8][pix[2]]) ) >> 4;
+            /* Contrast on untouched pixel */
+            if( ( processing->contrast          <= -0.01 || processing->contrast          >= 0.01 )
+            || ( processing->clarity           <= -0.01 || processing->clarity           >= 0.01 )
+            || ( processing->gradient_contrast <= -0.01 || processing->gradient_contrast >= 0.01 ) )
+            {
+                int32_t cval = ( ((pm[0][pix[0]] /* + pm[1][pix[1]] + pm[2][pix[2]] */) << 2)
+                             + ((/* pm[3][pix[0]] + */ pm[4][pix[1]] /* + pm[5][pix[2]] */) * 11)
+                             +  (/* pm[6][pix[0]] + pm[7][pix[1]] + */ pm[8][pix[2]]) ) >> 4;
 
-            if( processing->clarity <= -0.01 || processing->clarity >= 0.01 )
-            {
-                /* clarity part 2 */
-                double factor = processing->clarity_curve[LIMIT16(cval)];
-                expo_correction *= factor * factor;
-            }
-            if( processing->contrast <= -0.01 || processing->contrast >= 0.01 )
-            {
-                /* contrast factor */
-                expo_correction *= processing->contrast_curve[LIMIT16(cval)];
-            }
-            if( processing->gradient_contrast <= -0.01 || processing->gradient_contrast >= 0.01 )
-            {
-                /* gradient contrast factor */
-                expo_correction_gradient *= processing->gradient_contrast_curve[LIMIT16(cval)];
+                if( processing->clarity <= -0.01 || processing->clarity >= 0.01 )
+                {
+                    /* clarity part 2 */
+                    double factor = processing->clarity_curve[LIMIT16(cval)];
+                    expo_correction *= factor * factor;
+                }
+                if( processing->contrast <= -0.01 || processing->contrast >= 0.01 )
+                {
+                    /* contrast factor */
+                    expo_correction *= processing->contrast_curve[LIMIT16(cval)];
+                }
+                if( processing->gradient_contrast <= -0.01 || processing->gradient_contrast >= 0.01 )
+                {
+                    /* gradient contrast factor */
+                    expo_correction_gradient *= processing->gradient_contrast_curve[LIMIT16(cval)];
+                }
             }
         }
 
@@ -728,13 +782,19 @@ void apply_processing_object( processingObject_t * processing,
     }
 
     //Code for HueVs...
-    if( ( processing->use_rgb_curves || processing->allow_creative_adjustments )
-     && ( processing->hue_vs_luma_used || processing->hue_vs_saturation_used || processing->hue_vs_hue_used ) )
+    if( (processing->allow_creative_adjustments )
+     && ( processing->hue_vs_luma_used
+       || processing->hue_vs_saturation_used
+       || processing->hue_vs_hue_used
+       || processing->luma_vs_saturation_used ) )
     {
         for (uint16_t * pix = img; pix < img_end; pix += 3)
         {
             float hsl[3];
-            rgb_to_hsl( pix, hsl );
+            float rgb[3];
+            for( int i = 0; i < 3; i++ ) rgb[i] = pix[i] / 65535.0f;
+            fromRGBtoHSV( rgb, hsl );
+            //rgb_to_hsl( pix, hsl );
 
             /* Calculate saturation value of untouched pixel (taken from vibrance, gives better results than from rgb_to_hsl) */
             // ///////////////////////
@@ -769,11 +829,17 @@ void apply_processing_object( processingObject_t * processing,
             if( hsl[0] < 0 ) hsl[0] += 360;
             else if( hsl[0] >= 360 ) hsl[0] -= 360;
 
-            hsl_to_rgb( hsl, pix );
+            uint16_t luma = (uint16_t)((hsl[2]) * 36000.0);
+            hsl[1] *= 1.0 + (processing->luma_vs_saturation[luma] * 2);
+            if( hsl[1] < 0.0 ) hsl[1] = 0.0;
+
+            //hsl_to_rgb( hsl, pix );
+            fromHSVtoRGB( hsl, rgb );
+            for( int i = 0; i < 3; i++ ) pix[i] = LIMIT16( rgb[i] * 65535.0f + 0.5f );
         }
     }
 
-    if (processing->use_saturation || processing->allow_creative_adjustments)
+    if (processing->allow_creative_adjustments)
     {
         if( processing->vibrance > 1.01 || processing->vibrance < 0.99 )
         {
@@ -845,7 +911,7 @@ void apply_processing_object( processingObject_t * processing,
     }
 
     /* Toning */
-    if (processing->use_rgb_curves || processing->allow_creative_adjustments)
+    if (processing->allow_creative_adjustments)
     {
         if( processing->toning_dry < 99.8 )
         {
@@ -859,7 +925,7 @@ void apply_processing_object( processingObject_t * processing,
         }
     }
 
-    if (processing->use_rgb_curves || processing->allow_creative_adjustments)
+    if (processing->allow_creative_adjustments)
     {
         /* Contrast Curve (OMG putting this after gamma made it 999x better) */
         for (uint16_t * pix = img; pix < img_end; pix += 3)
@@ -870,7 +936,7 @@ void apply_processing_object( processingObject_t * processing,
         }
     }
 
-    if (processing->use_rgb_curves || processing->allow_creative_adjustments)
+    if (processing->allow_creative_adjustments)
     {
         //Gradation curve
         for (uint16_t * pix = img; pix < img_end; pix += 3)
@@ -908,6 +974,13 @@ void apply_processing_object( processingObject_t * processing,
 
     if (processingGetSharpening(processing) > 0.005)
     {
+        /* Use sobel filter to create a edge mask */
+        uint16_t *gray,
+             *sobel_h_res,
+             *sobel_v_res,
+             *contour_img;
+        if( processing->sh_masking > 0 ) sobelFilter( inputImage, &gray, &sobel_h_res, &sobel_v_res, &contour_img, imageX, imageY );
+
         /* Avoid gaps in pixels if skipping pixels during sharpen */
         if (sharp_skip != 1) memcpy(outputImage, inputImage, img_s * sizeof(uint16_t));
     
@@ -928,6 +1001,11 @@ void apply_processing_object( processingObject_t * processing,
             uint16_t * row = img + (y * rl); /* current row */
             uint16_t * p_row = img + ((y-1) * rl); /* previous */
             uint16_t * n_row = img + ((y+1) * rl); /* next */
+            uint16_t * cont_row;
+            if( processing->sh_masking > 0 )
+            {
+                cont_row = contour_img + (y * imageX);
+            }
 
             for (uint32_t x = 3+sharp_start; x < x_max; x+=sharp_skip)
             {
@@ -937,7 +1015,25 @@ void apply_processing_object( processingObject_t * processing,
                               - kx[row[x-3]]
                               - kx[row[x+3]];
 
-                out_row[x] = LIMIT16(sharp);
+                /* use the edge mask for sharpening only edges */
+                if( processing->sh_masking > 0 )
+                {
+                    uint32_t x1 = x / 3;
+                    /* more contrast & brightness for mask */
+                    uint32_t maskIntensity = 15000;
+                    uint32_t cont = cont_row[x1] + (100-(uint32_t)processing->sh_masking) * 150;
+                    if( cont > maskIntensity ) cont = maskIntensity;
+                    /* calc output in dependency to mask slider */
+                    out_row[x] = LIMIT16( ( cont / (float)maskIntensity) * LIMIT16(sharp)
+                                      + ( ( maskIntensity - cont ) / (float)maskIntensity ) * row[x] );
+                    /* Show mask */
+                    //out_row[x] = LIMIT16(cont/(float)maskIntensity*65535.0);
+                }
+                /* sharpen all */
+                else
+                {
+                    out_row[x] = LIMIT16(sharp);
+                }
             }
 
             /* Edge pixels (basically don't do any changes to them) */
@@ -954,6 +1050,14 @@ void apply_processing_object( processingObject_t * processing,
         /* Copy top and bottom row */
         memcpy(outputImage, inputImage, rl * sizeof(uint16_t));
         memcpy(outputImage + (rl*(imageY-1)), inputImage + (rl*(imageY-1)), rl * sizeof(uint16_t));
+
+        if( processing->sh_masking > 0 )
+        {
+            if( gray ) free( gray );
+            if( sobel_h_res ) free( sobel_h_res );
+            if( sobel_v_res ) free( sobel_v_res );
+            if( contour_img ) free( contour_img );
+        }
     }
     else
     {
@@ -1123,14 +1227,22 @@ void processingSetWhiteBalance(processingObject_t * processing, double WBKelvin,
 {
     double * p_xyz_to_rgb;
     double * p_ciecam02;
+
     if( processing->use_cam_matrix == 2 ) {
-        //Danne matrix fix
-        p_xyz_to_rgb = xyz_to_rgb_danne;
+        /* Danne matrix fix converts to "sRGB", so we will convert back to "XYZ",
+         * pretending Danne fix is real sRGB, and THEN convert to whatever RGB
+         * space we actually want. TODO: remove this as soon as possible */
+        p_xyz_to_rgb = alloca(9 * sizeof(double)); // I LOVE ALLOCA OMG
+        double sRGB_to_xyz[9];
+        invertMatrix(xyz_to_rgb, sRGB_to_xyz); // the xyz_to_rgb is for sRGB
+        double DanneEffectMatrix[9]; /* Applies the Danne effect to an image in XYZ space */
+        multiplyMatrices(sRGB_to_xyz, xyz_to_rgb_danne, DanneEffectMatrix);
+        multiplyMatrices(colour_gamuts[processing->colour_gamut], DanneEffectMatrix, p_xyz_to_rgb);
         p_ciecam02 = ciecam02_danne;
     }
     else {
         //scientific camera matrix
-        p_xyz_to_rgb = xyz_to_rgb;
+        p_xyz_to_rgb = colour_gamuts[processing->colour_gamut]/* alloca(9 * sizeof(double)) */;
         p_ciecam02 = ciecam02;
     }
 
@@ -1272,13 +1384,15 @@ void processingSetGamma(processingObject_t * processing, double gammaValue)
     /* Needs to be inverse */
     double gamma = 1.0 / gammaValue;
 
-    if (processing->exposure_stops < 0.0 || !processing->tone_mapping)
+    double (* tone_mapping_function)(double) = tonemap_functions[processing->tonemap_function];
+
+    if (processing->exposure_stops < 0.0 || processing->tonemap_function == 0)
     {
         /* Precalculate the exposure curve */
         for (int i = 0; i < 65536; ++i)
         {
             double pixel = (double)i/65535.0;
-            if (processing->tone_mapping) pixel = processing->tone_mapping_function(pixel);
+            pixel = tone_mapping_function(pixel);
             processing->pre_calc_gamma[i] = (uint16_t)(65535.0 * pow(pixel, gamma));
         }
     }
@@ -1293,7 +1407,7 @@ void processingSetGamma(processingObject_t * processing, double gammaValue)
             /* Tone mapping also (reinhard) */
             double pixel = (double)i/65535.0;
             pixel *= exposure_factor;
-            pixel = processing->tone_mapping_function(pixel);
+            pixel = tone_mapping_function(pixel);
             pixel = 65535.0 * pow(pixel, gamma);
             pixel = LIMIT16(pixel);
             processing->pre_calc_gamma[i] = pixel;
@@ -1311,13 +1425,15 @@ void processingSetGammaGradient(processingObject_t * processing, double gammaVal
     /* Needs to be inverse */
     double gamma = 1.0 / gammaValue;
 
-    if (processing->exposure_stops+processing->gradient_exposure_stops < 0.0 || !processing->tone_mapping)
+    double (* tone_mapping_function)(double) = tonemap_functions[processing->tonemap_function];
+
+    if (processing->exposure_stops+processing->gradient_exposure_stops < 0.0 || processing->tonemap_function == 0)
     {
         /* Precalculate the exposure curve */
         for (int i = 0; i < 65536; ++i)
         {
             double pixel = (double)i/65535.0;
-            if (processing->tone_mapping) pixel = processing->tone_mapping_function(pixel);
+            pixel = tone_mapping_function(pixel);
             processing->pre_calc_gamma_gradient[i] = (uint16_t)(65535.0 * pow(pixel, gamma));
         }
     }
@@ -1332,7 +1448,7 @@ void processingSetGammaGradient(processingObject_t * processing, double gammaVal
             /* Tone mapping also (reinhard) */
             double pixel = (double)i/65535.0;
             pixel *= exposure_factor;
-            pixel = processing->tone_mapping_function(pixel);
+            pixel = tone_mapping_function(pixel);
             pixel = 65535.0 * pow(pixel, gamma);
             pixel = LIMIT16(pixel);
             processing->pre_calc_gamma_gradient[i] = pixel;
@@ -1358,25 +1474,25 @@ void processingSet3WayCorrection( processingObject_t * processing,
     processing_update_curves(processing);
 }
 
-void processing_enable_tonemapping(processingObject_t * processing)
-{
-    (processing)->tone_mapping = 1;
-    /* This will update everything necessary to enable tonemapping */
-    processingSetGamma(processing, processing->gamma_power);
-    processingSetGammaGradient(processing, processing->gamma_power);
-    processing_update_matrices(processing);
-    processing_update_matrices_gradient(processing);
-}
+// void processing_enable_tonemapping(processingObject_t * processing)
+// {
+//     (processing)->tone_mapping = 1;
+//     /* This will update everything necessary to enable tonemapping */
+//     processingSetGamma(processing, processing->gamma_power);
+//     processingSetGammaGradient(processing, processing->gamma_power);
+//     processing_update_matrices(processing);
+//     processing_update_matrices_gradient(processing);
+// }
 
-void processing_disable_tonemapping(processingObject_t * processing) 
-{
-    (processing)->tone_mapping = 0;
-    /* This will update everything necessary to disable tonemapping */
-    processingSetGamma(processing, processing->gamma_power);
-    processingSetGammaGradient(processing, processing->gamma_power);
-    processing_update_matrices(processing);
-    processing_update_matrices_gradient(processing);
-}
+// void processing_disable_tonemapping(processingObject_t * processing) 
+// {
+//     (processing)->tone_mapping = 0;
+//     /* This will update everything necessary to disable tonemapping */
+//     processingSetGamma(processing, processing->gamma_power);
+//     processingSetGammaGradient(processing, processing->gamma_power);
+//     processing_update_matrices(processing);
+//     processing_update_matrices_gradient(processing);
+// }
 
 /* Set black and white level */
 void processingSetBlackAndWhiteLevel( processingObject_t * processing, 
@@ -1384,8 +1500,12 @@ void processingSetBlackAndWhiteLevel( processingObject_t * processing,
 {
     /* Convert levels to 16bit */
     int bits_shift = 16 - mlvBitDepth;
-    if(mlvBlackLevel) processing->black_level = mlvBlackLevel << bits_shift;
-    if(mlvWhiteLevel)
+    if( mlvBlackLevel >= 0 )
+    {
+        if(mlvBlackLevel) processing->black_level = mlvBlackLevel << bits_shift;
+        else processing->black_level = 0;
+    }
+    if( mlvWhiteLevel >= 0 )
     {
         processing->white_level = mlvWhiteLevel << bits_shift;
         /* Lowering white level a bit avoids pink grain in highlihgt reconstruction */
@@ -1420,13 +1540,13 @@ void processingSetBlackLevel(processingObject_t * processing, int mlvBlackLevel,
 {
     processingSetBlackAndWhiteLevel( processing,
                                      mlvBlackLevel,
-                                     0, // if zero leave value untouched
+                                     -1, // if -1 leave value untouched
                                      mlvBitDepth );
 }
 void processingSetWhiteLevel(processingObject_t * processing, int mlvWhiteLevel, int mlvBitDepth)
 {
     processingSetBlackAndWhiteLevel( processing,
-                                     0, // if zero leave value untouched
+                                     -1, // if -1 leave value untouched
                                      mlvWhiteLevel,
                                      mlvBitDepth );
 }
@@ -1757,9 +1877,6 @@ void analyse_frame_highest_green(processingObject_t *processing, int imageX, int
             }
         }
     }
-#ifndef STDOUT_SILENT
-    printf( "highest green: %d (from 16bit); %d pixels; %d processed lines\r\n", processing->highest_green, highest_value, imageY );
-#endif
 }
 
 //Set LUT strength factor
@@ -1832,10 +1949,15 @@ void processingSetHueVsCurves(processingObject_t *processing, int num, float *pX
         curve = processing->hue_vs_saturation;
         used = &processing->hue_vs_saturation_used;
     }
-    else
+    else if( channel == 2 )
     {
         curve = processing->hue_vs_luma;
         used = &processing->hue_vs_luma_used;
+    }
+    else
+    {
+        curve = processing->luma_vs_saturation;
+        used = &processing->luma_vs_saturation_used;
     }
     //Init
     if( num < 2 )

@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TranscodeDialog</class>
+ <widget class="QDialog" name="TranscodeDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>480</width>
+    <height>360</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Transcode and Import RAW2MLV</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QPushButton" name="pushButtonAddPics">
+       <property name="toolTip">
+        <string>Add Picture(s)</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="ressources.qrc">
+         <normaloff>:/RetinaIMG/RetinaIMG/Images-icon.png</normaloff>:/RetinaIMG/RetinaIMG/Images-icon.png</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>24</width>
+         <height>24</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonAddSequence">
+       <property name="toolTip">
+        <string>Add Sequence Folder</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="ressources.qrc">
+         <normaloff>:/RetinaIMG/RetinaIMG/Pic-Folder-Open-icon.png</normaloff>:/RetinaIMG/RetinaIMG/Pic-Folder-Open-icon.png</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>24</width>
+         <height>24</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item row="1" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QComboBox" name="comboBoxBitDepth">
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Use this bitdepth</string>
+       </property>
+       <property name="currentText">
+        <string>Original Bitdepth</string>
+       </property>
+       <item>
+        <property name="text">
+         <string>Original Bitdepth</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>10 bit</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>12 bit</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>14 bit</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>16 bit</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboBoxFps">
+       <item>
+        <property name="text">
+         <string>23.976 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>24 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>25 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>29.97 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>30 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>48 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>50 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>59.94 fps</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>60 fps</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkBoxCompress">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="toolTip">
+        <string>Lossless Compression</string>
+       </property>
+       <property name="text">
+        <string>Compress</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_3">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item row="2" column="0">
+    <widget class="QTreeWidget" name="treeWidget">
+     <attribute name="headerDefaultSectionSize">
+      <number>200</number>
+     </attribute>
+     <column>
+      <property name="text">
+       <string>Source</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Full Path</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Target</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonTranscode">
+       <property name="text">
+        <string>Transcode and Import</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>pushButtonAddPics</tabstop>
+  <tabstop>pushButtonAddSequence</tabstop>
+  <tabstop>treeWidget</tabstop>
+  <tabstop>pushButtonTranscode</tabstop>
+ </tabstops>
+ <resources>
+  <include location="ressources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

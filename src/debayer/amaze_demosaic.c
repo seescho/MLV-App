@@ -57,7 +57,7 @@
 
     #define COERCE(x,lo,hi) MAX(MIN((x),(hi)),(lo))
 
-    #ifndef WIN32
+    //#ifndef WIN32
     #define MIN(a,b) \
     ({ __typeof__ ((a)+(b)) _a = (a); \
     __typeof__ ((a)+(b)) _b = (b); \
@@ -73,14 +73,14 @@
     _a * _a; })
 
     #define min MIN
-    #else
-
-    #define MIN min
-    #define MAX max
-    #define SQR(a) (a*a)
-
-
-    #endif
+    //#else
+    //
+    //#define MIN min
+    //#define MAX max
+    //#define SQR(a) (a*a)
+    //
+    //
+    //#endif
 
     #ifndef __SSE2__
     /* from RT sleef.c */
@@ -119,8 +119,6 @@
 
     void demosaic(amazeinfo_t * inputdata) /* All arguments in 1 struct for posix */
     {
-        //printf ("AMaZE interpolation ...\n");
-
         float ** restrict rawData = inputdata->rawData;    /* holds preprocessed pixel values, rawData[i][j] corresponds to the ith row and jth column */
         float ** restrict red = inputdata->red;        /* the interpolated red plane */
         float ** restrict green = inputdata->green;      /* the interpolated green plane */

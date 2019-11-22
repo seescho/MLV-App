@@ -41,10 +41,15 @@
 #include "SingleFrameExportDialog.h"
 #include "FpmInstaller.h"
 #include "ScopesLabel.h"
+#include "avir/avirthreadpool.h"
+#include "MoveToTrash.h"
+#include "OverwriteListDialog.h"
+#include "PixelMapListDialog.h"
+#include "TranscodeDialog.h"
 
 #define APPNAME "MLV App"
-#define VERSION "1.7"
-#define GITVERSION "QTv1.7"
+#define VERSION "1.9"
+#define GITVERSION "QTv1.9"
 
 #define FACTOR_DS       22.5
 #define FACTOR_LS       11.2
@@ -939,6 +944,7 @@ int MainWindow::openMlv( QString fileName )
     ui->labelHueVsHue->setProcessingObject( m_pProcessingObject );
     ui->labelHueVsSat->setProcessingObject( m_pProcessingObject );
     ui->labelHueVsLuma->setProcessingObject( m_pProcessingObject );
+    ui->labelLumaVsSat->setProcessingObject( m_pProcessingObject );
 
     m_frameChanged = true;
 
@@ -1037,9 +1043,12 @@ void MainWindow::initGui( void )
     m_previewDebayerGroup->addAction( ui->actionUseBilinear );
     m_previewDebayerGroup->addAction( ui->actionUseLmmseDebayer );
     m_previewDebayerGroup->addAction( ui->actionUseIgvDebayer );
+    m_previewDebayerGroup->addAction( ui->actionUseAhdDebayer );
     m_previewDebayerGroup->addAction( ui->actionAlwaysUseAMaZE );
     m_previewDebayerGroup->addAction( ui->actionCaching );
+    m_previewDebayerGroup->addAction( ui->actionDontSwitchDebayerForPlayback );
     ui->actionUseBilinear->setChecked( true );
+    ui->actionCaching->setVisible( false );
 
     //Scope menu as group
     m_scopeGroup = new QActionGroup( this );
@@ -1294,12 +1303,10 @@ void MainWindow::initGui( void )
     ui->labelHueVsLuma->setDiagramType( HueVsDiagram::HueVsLuminance );
     ui->labelHueVsLuma->paintElement();
 
-    //Debayer in Receipt
-    //ui->groupBoxDebayer->setVisible( false );
-    ui->actionUseLmmseDebayer->setVisible( false );
-    ui->actionUseIgvDebayer->setVisible( false );
-    ui->actionAlwaysUseAMaZE->setVisible( false );
-    ui->actionCaching->setVisible( false );
+    //LumaVsSat
+    ui->labelLumaVsSat->setFrameChangedPointer( &m_frameChanged );
+    ui->labelLumaVsSat->setDiagramType( HueVsDiagram::LuminanceVsSaturation );
+    ui->labelLumaVsSat->paintElement();
 
     //Call temp sliders once for stylesheet
     on_horizontalSliderTemperature_valueChanged( ui->horizontalSliderTemperature->value() );
@@ -1313,7 +1320,12 @@ void MainWindow::initGui( void )
     ui->toolButtonDualIsoForce->setVisible( false );
 
     //Vidstab
-   on_checkBoxVidstabEnable_toggled( false );
+    on_checkBoxVidstabEnable_toggled( false );
+
+    //Sharpen Mask is disabled by default
+    ui->label_ShMasking->setEnabled( false );
+    ui->label_ShMaskingText->setEnabled( false );
+    ui->horizontalSliderShMasking->setEnabled( false );
 
     //Reveal in Explorer
 #ifdef Q_OS_WIN
@@ -1327,6 +1339,17 @@ void MainWindow::initGui( void )
 
     //set CPU Usage
     m_countTimeDown = -1;   //Time in seconds for CPU countdown
+
+    //raw2mlv available?
+    ui->actionTranscodeAndImport->setVisible( false );
+#ifdef Q_OS_WIN
+    if( QFileInfo( QString( "%1/raw2mlv.exe" ).arg( QCoreApplication::applicationDirPath() ) ).exists() )
+        ui->actionTranscodeAndImport->setVisible( true );
+#endif
+#ifdef Q_OS_UNIX
+    if( QFileInfo( QString( "%1/raw2mlv" ).arg( QCoreApplication::applicationDirPath() ) ).exists() )
+        ui->actionTranscodeAndImport->setVisible( true );
+#endif
 }
 
 //Initialize the library
@@ -1410,7 +1433,6 @@ void MainWindow::readSettings()
     m_resizeWidth = set.value( "resizeWidth", 1920 ).toUInt();
     m_resizeHeight = set.value( "resizeHeight", 1080 ).toUInt();
     m_resizeFilterHeightLocked = set.value( "resizeLockHeight", false ).toBool();
-    m_resizeFilterAlgorithm = set.value( "resizeAlgorithm", 0 ).toUInt();
     m_smoothFilterSetting = set.value( "smoothEnabled", 0 ).toUInt();
     m_hdrExport = set.value( "hdrExport", false ).toBool();
     m_fpsOverride = set.value( "fpsOverride", false ).toBool();
@@ -1419,6 +1441,7 @@ void MainWindow::readSettings()
     ui->groupBoxRawCorrection->setChecked( set.value( "expandedRawCorrection", false ).toBool() );
     ui->groupBoxCutInOut->setChecked( set.value( "expandedCutInOut", false ).toBool() );
     ui->groupBoxDebayer->setChecked( set.value( "expandedDebayer", true ).toBool() );
+    ui->groupBoxProfiles->setChecked( set.value( "expandedProfiles", true ).toBool() );
     ui->groupBoxProcessing->setChecked( set.value( "expandedProcessing", true ).toBool() );
     ui->groupBoxDetails->setChecked( set.value( "expandedDetails", false ).toBool() );
     ui->groupBoxHsl->setChecked( set.value( "expandedHsl", false ).toBool() );
@@ -1438,6 +1461,7 @@ void MainWindow::readSettings()
     resizeDocks({ui->dockWidgetSession}, {set.value( "dockSessionSize", 130 ).toInt()}, Qt::Vertical);
     m_pRecentFilesMenu->restoreState( set.value("recentSessions").toByteArray() );
     ui->actionAskForSavingOnQuit->setChecked( set.value( "askForSavingOnQuit", true ).toBool() );
+    ui->actionBetterResizer->setChecked( set.value( "betterResizerViewer", false ).toBool() );
     int themeId = set.value( "themeId", 0 ).toInt();
     if( themeId == 0 )
     {
@@ -1476,7 +1500,6 @@ void MainWindow::writeSettings()
     set.setValue( "resizeWidth", m_resizeWidth );
     set.setValue( "resizeHeight", m_resizeHeight );
     set.setValue( "resizeLockHeight", m_resizeFilterHeightLocked );
-    set.setValue( "resizeAlgorithm", m_resizeFilterAlgorithm );
     set.setValue( "smoothEnabled", m_smoothFilterSetting );
     set.setValue( "hdrExport", m_hdrExport );
     set.setValue( "fpsOverride", m_fpsOverride );
@@ -1485,6 +1508,7 @@ void MainWindow::writeSettings()
     set.setValue( "expandedRawCorrection", ui->groupBoxRawCorrection->isChecked() );
     set.setValue( "expandedCutInOut", ui->groupBoxCutInOut->isChecked() );
     set.setValue( "expandedDebayer", ui->groupBoxDebayer->isChecked() );
+    set.setValue( "expandedProfiles", ui->groupBoxProfiles->isChecked() );
     set.setValue( "expandedProcessing", ui->groupBoxProcessing->isChecked() );
     set.setValue( "expandedDetails", ui->groupBoxDetails->isChecked() );
     set.setValue( "expandedHsl", ui->groupBoxHsl->isChecked() );
@@ -1504,6 +1528,7 @@ void MainWindow::writeSettings()
     else set.setValue( "dockSessionSize", ui->dockWidgetSession->width() );
     set.setValue( "recentSessions", m_pRecentFilesMenu->saveState() );
     set.setValue( "askForSavingOnQuit", ui->actionAskForSavingOnQuit->isChecked() );
+    set.setValue( "betterResizerViewer", ui->actionBetterResizer->isChecked() );
     if( ui->actionDarkThemeStandard->isChecked() ) set.setValue( "themeId", 0 );
     else set.setValue( "themeId", 1 );
 }
@@ -1690,17 +1715,17 @@ void MainWindow::startExportPipe(QString fileName)
         }
     }
 
-    //Setup resize algorithm
-    QString resizeAlgorithm = QString( "sws_flags=" );
-    if( m_resizeFilterAlgorithm == SCALE_BILINEAR ) resizeAlgorithm.append( "bilinear" );
-    else if( m_resizeFilterAlgorithm == SCALE_SINC ) resizeAlgorithm.append( "sinc" );
-    else if( m_resizeFilterAlgorithm == SCALE_LANCZOS ) resizeAlgorithm.append( "lanczos" );
-    else if( m_resizeFilterAlgorithm == SCALE_BSPLINE ) resizeAlgorithm.append( "spline" );
-    else resizeAlgorithm.append( "bicubic" ); //default
-
-    //HDR
+    //HDR and blending
     QString hdrString = QString( "" );
-    if( m_hdrExport && isHdrClip ) hdrString = QString( ",tblend=all_mode=average" );
+    if( m_hdrExport && isHdrClip )
+        hdrString = QString( ",tblend=all_mode=average" );
+
+    if( m_codecProfile == CODEC_TIFF && m_codecOption == CODEC_TIFF_AVG )
+    {
+        int frames = m_exportQueue.first()->cutOut() - m_exportQueue.first()->cutIn() + 1;
+        if( frames > 128 ) frames = 128;
+        hdrString = QString( ",tmix=frames=%1" ).arg( frames );
+    }
 
     //Vidstab, 2nd pass
     QString vidstabString = QString( "" );
@@ -1712,7 +1737,7 @@ void MainWindow::startExportPipe(QString fileName)
 #else
     QString vidstabFile = QString( "\"%1/tmp_transform_vectors.trf\"" ).arg( QCoreApplication::applicationDirPath() );
 #endif
-    if( m_exportQueue.first()->vidStabEnabled() )
+    if( m_exportQueue.first()->vidStabEnabled() && m_codecProfile == CODEC_H264 )
     {
         if( m_exportQueue.first()->vidStabTripod() )
         {
@@ -1728,12 +1753,21 @@ void MainWindow::startExportPipe(QString fileName)
         }
     }
 
-    //Resize Filter + colorspace conversion (for getting right colors)
+    //Colorspace conversion (for getting right colors)
     QString resizeFilter = QString( "" );
+    //a colorspace conversion is always needed to get right colors
+    resizeFilter = QString( "-vf %1scale=in_color_matrix=bt601:out_color_matrix=bt709%2%3 " )
+            .arg( moireeFilter )
+            .arg( hdrString )
+            .arg( vidstabString );
+    //qDebug() << resizeFilter;
+
+    //Dimension & scaling
+    uint16_t width = getMlvWidth(m_pMlvObject);
+    uint16_t height = getMlvHeight(m_pMlvObject);
+    bool scaled = false;
     if( m_resizeFilterEnabled )
     {
-        uint16_t height;
-
         //Autocalc height
         if( m_resizeFilterHeightLocked )
         {
@@ -1746,27 +1780,12 @@ void MainWindow::startExportPipe(QString fileName)
         {
             height = m_resizeHeight;
         }
-
-        //H.264 & H.265 needs a size which can be divided by 2
-        if( m_codecProfile == CODEC_H264
-         || m_codecProfile == CODEC_H265 )
-        {
-            m_resizeWidth += m_resizeWidth % 2;
-            height += height % 2;
-        }
-        resizeFilter = QString( "-vf %1scale=w=%2:h=%3:%4:in_color_matrix=bt601:out_color_matrix=bt709%5%6 " )
-                .arg( moireeFilter )
-                .arg( m_resizeWidth )
-                .arg( height )
-                .arg( resizeAlgorithm )
-                .arg( hdrString )
-                .arg( vidstabString );
+        width = m_resizeWidth;
+        scaled = true;
     }
     else if( m_exportQueue.first()->stretchFactorX() != 1.0
           || m_exportQueue.first()->stretchFactorY() != 1.0 )
     {
-        uint16_t width;
-        uint16_t height;
         //Upscale only
         if( m_exportQueue.first()->stretchFactorY() == STRETCH_V_033 )
         {
@@ -1778,30 +1797,22 @@ void MainWindow::startExportPipe(QString fileName)
             width = getMlvWidth( m_pMlvObject ) * m_exportQueue.first()->stretchFactorX();
             height = getMlvHeight( m_pMlvObject ) * m_exportQueue.first()->stretchFactorY();
         }
-        //H.264 & H.265 needs a size which can be divided by 2
-        if( m_codecProfile == CODEC_H264
-         || m_codecProfile == CODEC_H265 )
+        scaled = true;
+    }
+    if( m_codecProfile == CODEC_H264
+     || m_codecProfile == CODEC_H265 )
+    {
+        if( width != width + (width % 2) )
         {
             width += width % 2;
-            height += height % 2;
+            scaled = true;
         }
-        resizeFilter = QString( "-vf %1scale=w=%2:h=%3:%4:in_color_matrix=bt601:out_color_matrix=bt709%5%6 " )
-                .arg( moireeFilter )
-                .arg( width )
-                .arg( height )
-                .arg( resizeAlgorithm )
-                .arg( hdrString )
-                .arg( vidstabString );
+        if( height != height + (height % 2) )
+        {
+            height += height % 2;
+            scaled = true;
+        }
     }
-    else
-    {
-        //a colorspace conversion is always needed to get right colors
-        resizeFilter = QString( "-vf %1scale=in_color_matrix=bt601:out_color_matrix=bt709%2%3 " )
-                .arg( moireeFilter )
-                .arg( hdrString )
-                .arg( vidstabString );
-    }
-    //qDebug() << resizeFilter;
 
     //FFMpeg export
 #if defined __linux__ && !defined APP_IMAGE
@@ -1817,14 +1828,15 @@ void MainWindow::startExportPipe(QString fileName)
 #ifdef STDOUT_SILENT
     program.append( QString( " -loglevel 0" ) );
 #endif
+
     //We need it later for multipass
     QString ffmpegCommand = program;
 
     QString output = fileName.left( fileName.lastIndexOf( "." ) );
-    QString resolution = QString( "%1x%2" ).arg( getMlvWidth( m_pMlvObject ) ).arg( getMlvHeight( m_pMlvObject ) );
+    QString resolution = QString( "%1x%2" ).arg( width ).arg( height );
 
     //VidStab: First pass
-    if( m_exportQueue.first()->vidStabEnabled() )
+    if( m_exportQueue.first()->vidStabEnabled() && m_codecProfile == CODEC_H264 )
     {
         QString stabCmd;
         if( m_exportQueue.first()->vidStabTripod() )
@@ -1872,17 +1884,49 @@ void MainWindow::startExportPipe(QString fileName)
                 totalFrames += m_exportQueue.at(i)->cutOut() - m_exportQueue.at(i)->cutIn() + 1;
             }
 
+            //Build buffer
+            uint16_t * imgBufferScaled;
+            imgBufferScaled = ( uint16_t* )malloc( width * height * 3 * sizeof( uint16_t ) );
+
             //Get all pictures and send to pipe
             for( uint32_t i = (m_exportQueue.first()->cutIn() - 1); i < m_exportQueue.first()->cutOut(); i++ )
             {
-                //Get picture, and lock render thread... there can only be one!
-                m_pRenderThread->lock();
-                getMlvProcessedFrame16( m_pMlvObject, i, imgBuffer, QThread::idealThreadCount() );
-                m_pRenderThread->unlock();
+                if( m_codecProfile == CODEC_TIFF && m_codecOption == CODEC_TIFF_AVG && i > 128 ) break;
 
-                //Write to pipe
-                fwrite(imgBuffer, sizeof( uint16_t ), frameSize, pPipeStab);
-                fflush(pPipeStab);
+                if( scaled )
+                {
+                    //Get picture, and lock render thread... there can only be one!
+                    m_pRenderThread->lock();
+                    getMlvProcessedFrame16( m_pMlvObject, i, imgBuffer, QThread::idealThreadCount() );
+                    m_pRenderThread->unlock();
+
+                    avir_scale_thread_pool scaling_pool;
+                    avir::CImageResizerVars vars; vars.ThreadPool = &scaling_pool;
+                    avir::CImageResizerParamsUltra roptions;
+                    avir::CImageResizer<> image_resizer( 16, 0, roptions );
+                    image_resizer.resizeImage( imgBuffer,
+                                               getMlvWidth(m_pMlvObject),
+                                               getMlvHeight(m_pMlvObject), 0,
+                                               imgBufferScaled,
+                                               width,
+                                               height,
+                                               3, 0, &vars );
+
+                    //Write to pipe
+                    fwrite(imgBufferScaled, sizeof( uint16_t ), width * height * 3, pPipeStab);
+                    fflush(pPipeStab);
+                }
+                else
+                {
+                    //Get picture, and lock render thread... there can only be one!
+                    m_pRenderThread->lock();
+                    getMlvProcessedFrame16( m_pMlvObject, i, imgBuffer, QThread::idealThreadCount() );
+                    m_pRenderThread->unlock();
+
+                    //Write to pipe
+                    fwrite(imgBuffer, sizeof( uint16_t ), frameSize, pPipeStab);
+                    fflush(pPipeStab);
+                }
 
                 //Set Status
                 m_pStatusDialog->ui->progressBar->setValue( ( i - ( m_exportQueue.first()->cutIn() - 1 ) + 1 ) >> 1 );
@@ -1895,42 +1939,56 @@ void MainWindow::startExportPipe(QString fileName)
             }
             //Close pipe
             pclose( pPipeStab );
+            free( imgBufferScaled );
             free( imgBuffer );
         }
     }
 
     if( m_codecProfile == CODEC_TIFF )
     {
-        //Creating a folder with the initial filename
-        QString folderName = QFileInfo( fileName ).path();
-        QString shortFileName = QFileInfo( fileName ).fileName();
-        folderName.append( "/" )
-                .append( shortFileName.left( shortFileName.lastIndexOf( "." ) ) );
-
-        QDir dir;
-        dir.mkpath( folderName );
-
-        //Now add the numbered filename
-        output = folderName;
-        output.append( "/" )
-                .append( shortFileName.left( shortFileName.lastIndexOf( "." ) ) )
-                .append( QString( "_%06d.tif" ) );
-
-        program.append( QString( " -r %1 -y -f rawvideo -s %2 -pix_fmt rgb48 -i - -c:v tiff -pix_fmt %3 -start_number %4 -color_primaries bt709 -color_trc bt709 -colorspace bt709 %5\"%6\"" )
-                    .arg( fps )
-                    .arg( resolution )
-                    .arg( "rgb48" )
-                    .arg( m_exportQueue.first()->cutIn() - 1 )
-                    .arg( resizeFilter )
-                    .arg( output ) );
-
-        //copy wav to the location, ffmpeg does not like to do it for us :-(
-        if( m_audioExportEnabled && doesMlvHaveAudio( m_pMlvObject ) )
+        if( m_codecOption == CODEC_TIFF_SEQ )
         {
-            QFile::copy( wavFileName, QString( "%1/%2.wav" ).arg( folderName ).arg( shortFileName.left( shortFileName.lastIndexOf( "." ) ) ) );
+            //Creating a folder with the initial filename
+            QString folderName = QFileInfo( fileName ).path();
+            QString shortFileName = QFileInfo( fileName ).fileName();
+            folderName.append( "/" )
+                    .append( shortFileName.left( shortFileName.lastIndexOf( "." ) ) );
+
+            QDir dir;
+            dir.mkpath( folderName );
+
+            //Now add the numbered filename
+            output = folderName;
+            output.append( "/" )
+                    .append( shortFileName.left( shortFileName.lastIndexOf( "." ) ) )
+                    .append( QString( "_%06d.tif" ) );
+
+            program.append( QString( " -r %1 -y -f rawvideo -s %2 -pix_fmt rgb48 -i - -c:v tiff -pix_fmt %3 -start_number %4 -color_primaries bt709 -color_trc bt709 -colorspace bt709 %5\"%6\"" )
+                        .arg( fps )
+                        .arg( resolution )
+                        .arg( "rgb48" )
+                        .arg( m_exportQueue.first()->cutIn() - 1 )
+                        .arg( resizeFilter )
+                        .arg( output ) );
+
+            //copy wav to the location, ffmpeg does not like to do it for us :-(
+            if( m_audioExportEnabled && doesMlvHaveAudio( m_pMlvObject ) )
+            {
+                QFile::copy( wavFileName, QString( "%1/%2.wav" ).arg( folderName ).arg( shortFileName.left( shortFileName.lastIndexOf( "." ) ) ) );
+            }
+            //Setup for scripting
+            m_pScripting->setNextScriptInputTiff( getMlvFramerate( m_pMlvObject ), folderName );
         }
-        //Setup for scripting
-        m_pScripting->setNextScriptInputTiff( getMlvFramerate( m_pMlvObject ), folderName );
+        else
+        {
+            output.append( QString( ".tif" ) );
+            program.append( QString( " -r %1 -y -f rawvideo -s %2 -pix_fmt rgb48 -i - -c:v tiff -pix_fmt %3 -color_primaries bt709 -color_trc bt709 -colorspace bt709 %4\"%5\"" )
+                        .arg( fps )
+                        .arg( resolution )
+                        .arg( "rgb48" )
+                        .arg( resizeFilter )
+                        .arg( output ) );
+        }
     }
     else if( m_codecProfile == CODEC_PNG )
     {
@@ -2291,20 +2349,52 @@ void MainWindow::startExportPipe(QString fileName)
             totalFrames += m_exportQueue.at(i)->cutOut() - m_exportQueue.at(i)->cutIn() + 1;
         }
 
+        //Build buffer
+        uint16_t * imgBufferScaled;
+        imgBufferScaled = ( uint16_t* )malloc( width * height * 3 * sizeof( uint16_t ) );
+
         //Get all pictures and send to pipe
         for( uint32_t i = (m_exportQueue.first()->cutIn() - 1); i < m_exportQueue.first()->cutOut(); i++ )
         {
-            //Get picture, and lock render thread... there can only be one!
-            m_pRenderThread->lock();
-            getMlvProcessedFrame16( m_pMlvObject, i, imgBuffer, QThread::idealThreadCount() );
-            m_pRenderThread->unlock();
+            if( m_codecProfile == CODEC_TIFF && m_codecOption == CODEC_TIFF_AVG && i > 128 ) break;
 
-            //Write to pipe
-            fwrite(imgBuffer, sizeof( uint16_t ), frameSize, pPipe);
-            fflush(pPipe);
+            if( scaled )
+            {
+                //Get picture, and lock render thread... there can only be one!
+                m_pRenderThread->lock();
+                getMlvProcessedFrame16( m_pMlvObject, i, imgBuffer, QThread::idealThreadCount() );
+                m_pRenderThread->unlock();
+
+                avir_scale_thread_pool scaling_pool;
+                avir::CImageResizerVars vars; vars.ThreadPool = &scaling_pool;
+                avir::CImageResizerParamsUltra roptions;
+                avir::CImageResizer<> image_resizer( 16, 0, roptions );
+                image_resizer.resizeImage( imgBuffer,
+                                           getMlvWidth(m_pMlvObject),
+                                           getMlvHeight(m_pMlvObject), 0,
+                                           imgBufferScaled,
+                                           width,
+                                           height,
+                                           3, 0, &vars );
+
+                //Write to pipe
+                fwrite(imgBufferScaled, sizeof( uint16_t ), width * height * 3, pPipe);
+                fflush(pPipe);
+            }
+            else
+            {
+                //Get picture, and lock render thread... there can only be one!
+                m_pRenderThread->lock();
+                getMlvProcessedFrame16( m_pMlvObject, i, imgBuffer, QThread::idealThreadCount() );
+                m_pRenderThread->unlock();
+
+                //Write to pipe
+                fwrite(imgBuffer, sizeof( uint16_t ), frameSize, pPipe);
+                fflush(pPipe);
+            }
 
             //Set Status
-            if( !m_exportQueue.first()->vidStabEnabled() )
+            if( !( m_exportQueue.first()->vidStabEnabled() && m_codecProfile == CODEC_H264 ) )
             {
                 m_pStatusDialog->ui->progressBar->setValue( i - ( m_exportQueue.first()->cutIn() - 1 ) + 1 );
                 m_pStatusDialog->ui->progressBar->repaint();
@@ -2323,6 +2413,7 @@ void MainWindow::startExportPipe(QString fileName)
         }
         //Close pipe
         pclose( pPipe );
+        free( imgBufferScaled );
         free( imgBuffer );
     }
 
@@ -2693,9 +2784,61 @@ void MainWindow::startExportAVFoundation(QString fileName)
 #endif
     else avfCodec = AVF_CODEC_PRORES_4444;
 
+    //Dimension & scaling
+    uint16_t width = getMlvWidth(m_pMlvObject);
+    uint16_t height = getMlvHeight(m_pMlvObject);
+    bool scaled = false;
+    if( m_resizeFilterEnabled )
+    {
+        //Autocalc height
+        if( m_resizeFilterHeightLocked )
+        {
+            height = (double)m_resizeWidth / (double)getMlvWidth( m_pMlvObject )
+                    / m_exportQueue.first()->stretchFactorX()
+                    * m_exportQueue.first()->stretchFactorY()
+                    * (double)getMlvHeight( m_pMlvObject ) + 0.5;
+        }
+        else
+        {
+            height = m_resizeHeight;
+        }
+        width = m_resizeWidth;
+        scaled = true;
+    }
+    else if( m_exportQueue.first()->stretchFactorX() != 1.0
+          || m_exportQueue.first()->stretchFactorY() != 1.0 )
+    {
+        //Upscale only
+        if( m_exportQueue.first()->stretchFactorY() == STRETCH_V_033 )
+        {
+            width = getMlvWidth( m_pMlvObject ) * 3;
+            height = getMlvHeight( m_pMlvObject );
+        }
+        else
+        {
+            width = getMlvWidth( m_pMlvObject ) * m_exportQueue.first()->stretchFactorX();
+            height = getMlvHeight( m_pMlvObject ) * m_exportQueue.first()->stretchFactorY();
+        }
+        scaled = true;
+    }
+    if( m_codecProfile == CODEC_H264
+     || m_codecProfile == CODEC_H265 )
+    {
+        if( width != width + (width % 2) )
+        {
+            width += width % 2;
+            scaled = true;
+        }
+        if( height != height + (height % 2) )
+        {
+            height += height % 2;
+            scaled = true;
+        }
+    }
+
     //Init Encoder
-    AVEncoder_t * encoder = initAVEncoder( getMlvWidth( m_pMlvObject ),
-                                           getMlvHeight( m_pMlvObject ),
+    AVEncoder_t * encoder = initAVEncoder( width,
+                                           height,
                                            avfCodec,
                                            AVF_COLOURSPACE_SRGB,
                                            getFramerate() );
@@ -2706,6 +2849,10 @@ void MainWindow::startExportAVFoundation(QString fileName)
     uint32_t frameSize = getMlvWidth( m_pMlvObject ) * getMlvHeight( m_pMlvObject ) * 3;
     uint16_t * imgBuffer;
     imgBuffer = ( uint16_t* )malloc( frameSize * sizeof( uint16_t ) );
+    uint16_t * imgBufferScaled;
+    uint8_t * imgBufferScaled8;
+    if( m_codecProfile != CODEC_H264 ) imgBufferScaled = ( uint16_t* )malloc( width * height * 3 * sizeof( uint16_t ) );
+    else imgBufferScaled8 = ( uint8_t* )malloc( width * height * 3 * sizeof( uint8_t ) );
 
     //Encoder frames
     for( uint64_t frame = ( m_exportQueue.first()->cutIn() - 1 ); frame < m_exportQueue.first()->cutOut(); frame++ )
@@ -2714,12 +2861,48 @@ void MainWindow::startExportAVFoundation(QString fileName)
         if( m_codecProfile == CODEC_H264 )
         {
             getMlvProcessedFrame8( m_pMlvObject, frame, m_pRawImage, QThread::idealThreadCount() );
-            addFrameToVideoFile8bit( encoder, m_pRawImage );
+            if( scaled )
+            {
+                avir_scale_thread_pool scaling_pool;
+                avir::CImageResizerVars vars; vars.ThreadPool = &scaling_pool;
+                avir::CImageResizerParamsUltra roptions;
+                avir::CImageResizer<> image_resizer( 8, 0, roptions );
+                image_resizer.resizeImage( m_pRawImage,
+                                           getMlvWidth(m_pMlvObject),
+                                           getMlvHeight(m_pMlvObject), 0,
+                                           imgBufferScaled8,
+                                           width,
+                                           height,
+                                           3, 0, &vars );
+                addFrameToVideoFile8bit( encoder, imgBufferScaled8 );
+            }
+            else
+            {
+                addFrameToVideoFile8bit( encoder, m_pRawImage );
+            }
         }
         else
         {
             getMlvProcessedFrame16( m_pMlvObject, frame, imgBuffer, QThread::idealThreadCount() );
-            addFrameToVideoFile( encoder, imgBuffer );
+            if( scaled )
+            {
+                avir_scale_thread_pool scaling_pool;
+                avir::CImageResizerVars vars; vars.ThreadPool = &scaling_pool;
+                avir::CImageResizerParamsUltra roptions;
+                avir::CImageResizer<> image_resizer( 16, 0, roptions );
+                image_resizer.resizeImage( imgBuffer,
+                                           getMlvWidth(m_pMlvObject),
+                                           getMlvHeight(m_pMlvObject), 0,
+                                           imgBufferScaled,
+                                           width,
+                                           height,
+                                           3, 0, &vars );
+                addFrameToVideoFile( encoder, imgBufferScaled );
+            }
+            else
+            {
+                addFrameToVideoFile( encoder, imgBuffer );
+            }
         }
 
         //Set Status
@@ -2733,6 +2916,8 @@ void MainWindow::startExportAVFoundation(QString fileName)
     }
 
     //Clean up
+    if( m_codecProfile != CODEC_H264 ) free( imgBufferScaled );
+    else free( imgBufferScaled8 );
     free( imgBuffer );
     endWritingVideoFile(encoder);
     freeAVEncoder(encoder);
@@ -2751,19 +2936,24 @@ void MainWindow::startExportAVFoundation(QString fileName)
         ffmpegAudioCommand.append( QString( "/ffmpeg\"" ) );
         ffmpegAudioCommand.prepend( QString( "\"" ) );
 
-        //Renaming needs time :P
-        QThread::msleep( 200 );
-
 #ifdef STDOUT_SILENT
         ffmpegAudioCommand.append( QString( " -loglevel 0" ) );
 #endif
 
-        ffmpegAudioCommand.append( QString( " -i \"%1\" -i \"%2\" -map 0:0 -map 1:0 -c copy \"%3\"" )
+        ffmpegAudioCommand.append( QString( " -y -i \"%1\" -i \"%2\" -map 0:0 -map 1:0 -c copy \"%3\"" )
                 .arg( tempFileName ).arg( wavFileName ).arg( fileName ) );
 
         QProcess ffmpegProc;
         //qDebug() << ffmpegAudioCommand <<
-        ffmpegProc.execute( ffmpegAudioCommand );
+        while( !QFileInfo( fileName ).exists()  ) //AVFoundation file will be corrupted for a unknown time until we can add audio
+        {
+            ffmpegProc.execute( ffmpegAudioCommand );
+
+            qApp->processEvents();
+
+            //Abort pressed? -> End the loop
+            if( m_exportAbortPressed ) break;
+        }
 
         QFile( tempFileName ).remove();
         QFile( wavFileName ).remove();
@@ -2944,7 +3134,7 @@ void MainWindow::saveSession(QString fileName)
     xmlWriter.writeStartDocument();
 
     xmlWriter.writeStartElement( "mlv_files" );
-    xmlWriter.writeAttribute( "version", "2" );
+    xmlWriter.writeAttribute( "version", "3" );
     xmlWriter.writeAttribute( "mlvapp", VERSION );
     for( int i = 0; i < ui->listWidgetSession->count(); i++ )
     {
@@ -3043,7 +3233,7 @@ void MainWindow::on_actionExportReceipt_triggered()
     xmlWriter.writeStartDocument();
 
     xmlWriter.writeStartElement( "receipt" );
-    xmlWriter.writeAttribute( "version", "2" );
+    xmlWriter.writeAttribute( "version", "3" );
     xmlWriter.writeAttribute( "mlvapp", VERSION );
 
     writeXmlElementsToFile( &xmlWriter, m_pSessionReceipts.at( m_lastActiveClipInSession ) );
@@ -3161,6 +3351,11 @@ void MainWindow::readXmlElementsFromFile(QXmlStreamReader *Rxml, ReceiptSettings
             receipt->setHueVsLuminance( Rxml->readElementText() );
             Rxml->readNext();
         }
+        else if( Rxml->isStartElement() && Rxml->name() == "lumaVsSaturation" )
+        {
+            receipt->setLumaVsSaturation( Rxml->readElementText() );
+            Rxml->readNext();
+        }
         else if( Rxml->isStartElement() && Rxml->name() == "gradientEnabled" )
         {
             receipt->setGradientEnabled( (bool)Rxml->readElementText().toInt() );
@@ -3201,6 +3396,11 @@ void MainWindow::readXmlElementsFromFile(QXmlStreamReader *Rxml, ReceiptSettings
             receipt->setSharpen( Rxml->readElementText().toInt() );
             Rxml->readNext();
         }
+        else if( Rxml->isStartElement() && Rxml->name() == "sharpenMasking" )
+        {
+            receipt->setShMasking( Rxml->readElementText().toInt() );
+            Rxml->readNext();
+        }
         else if( Rxml->isStartElement() && Rxml->name() == "chromaBlur" )
         {
             receipt->setChromaBlur( Rxml->readElementText().toInt() );
@@ -3224,13 +3424,72 @@ void MainWindow::readXmlElementsFromFile(QXmlStreamReader *Rxml, ReceiptSettings
         else if( Rxml->isStartElement() && Rxml->name() == "profile" )
         {
             uint8_t profile = (uint8_t)Rxml->readElementText().toUInt();
-            if( version < 2 && profile > 1 ) receipt->setProfile( profile + 1 );
-            else receipt->setProfile( profile );
+            if( version < 2 && profile > 1 ) receipt->setProfile( profile + 2 );
+            else if( version == 2 )
+            {
+                receipt->setProfile( profile + 1 );
+                receipt->setGamut( GAMUT_Rec709 );
+                if( ( profile != PROFILE_ALEXA_LOG )
+                 && ( profile != PROFILE_CINEON_LOG )
+                 && ( profile != PROFILE_SONY_LOG_3 )
+                 && ( profile != PROFILE_SRGB )
+                 && ( profile != PROFILE_REC709 )
+                 && ( profile != PROFILE_BMDFILM ) )
+                {
+                    receipt->setAllowCreativeAdjustments( true );
+                }
+                else
+                {
+                    receipt->setAllowCreativeAdjustments( false );
+                }
+                switch( profile )
+                {
+                case PROFILE_STANDARD:
+                case PROFILE_TONEMAPPED:
+                    receipt->setGamma( 315 );
+                    break;
+                case PROFILE_FILM:
+                    receipt->setGamma( 346 );
+                    break;
+                default:
+                    receipt->setGamma( 100 );
+                    break;
+                }
+            }
+            //else receipt->setProfile( profile ); //never load for v3, because we now have single settings
+            Rxml->readNext();
+        }
+        else if( Rxml->isStartElement() && Rxml->name() == "tonemap" )
+        {
+            receipt->setTonemap( Rxml->readElementText().toInt() );
+            Rxml->readNext();
+        }
+        else if( Rxml->isStartElement() && Rxml->name() == "gamut" )
+        {
+            receipt->setGamut( Rxml->readElementText().toInt() );
+            Rxml->readNext();
+        }
+        else if( Rxml->isStartElement() && Rxml->name() == "gamma" )
+        {
+            receipt->setGamma( Rxml->readElementText().toInt() );
             Rxml->readNext();
         }
         else if( Rxml->isStartElement() && Rxml->name() == "allowCreativeAdjustments" )
         {
             receipt->setAllowCreativeAdjustments( (bool)Rxml->readElementText().toInt() );
+            if( version == 2 )
+            {
+                int profile = receipt->profile();
+                if( ( profile != PROFILE_ALEXA_LOG )
+                 && ( profile != PROFILE_CINEON_LOG )
+                 && ( profile != PROFILE_SONY_LOG_3 )
+                 && ( profile != PROFILE_SRGB )
+                 && ( profile != PROFILE_REC709 )
+                 && ( profile != PROFILE_BMDFILM ) )
+                {
+                    receipt->setAllowCreativeAdjustments( true );
+                }
+            }
             Rxml->readNext();
         }
         else if( Rxml->isStartElement() && Rxml->name() == "denoiserWindow" )
@@ -3433,6 +3692,16 @@ void MainWindow::readXmlElementsFromFile(QXmlStreamReader *Rxml, ReceiptSettings
             receipt->setCaBlue( Rxml->readElementText().toInt() );
             Rxml->readNext();
         }
+        else if( Rxml->isStartElement() && Rxml->name() == "caDesaturate" )
+        {
+            receipt->setCaDesaturate( Rxml->readElementText().toInt() );
+            Rxml->readNext();
+        }
+        else if( Rxml->isStartElement() && Rxml->name() == "caRadius" )
+        {
+            receipt->setCaRadius( Rxml->readElementText().toInt() );
+            Rxml->readNext();
+        }
         else if( Rxml->isStartElement() && Rxml->name() == "stretchFactorX" )
         {
             receipt->setStretchFactorX( Rxml->readElementText().toDouble() );
@@ -3525,6 +3794,7 @@ void MainWindow::writeXmlElementsToFile(QXmlStreamWriter *xmlWriter, ReceiptSett
     xmlWriter->writeTextElement( "hueVsHue",                QString( "%1" ).arg( receipt->hueVsHue() ) );
     xmlWriter->writeTextElement( "hueVsSaturation",         QString( "%1" ).arg( receipt->hueVsSaturation() ) );
     xmlWriter->writeTextElement( "hueVsLuminance",          QString( "%1" ).arg( receipt->hueVsLuminance() ) );
+    xmlWriter->writeTextElement( "lumaVsSaturation",        QString( "%1" ).arg( receipt->lumaVsSaturation() ) );
     xmlWriter->writeTextElement( "shadows",                 QString( "%1" ).arg( receipt->shadows() ) );
     xmlWriter->writeTextElement( "highlights",              QString( "%1" ).arg( receipt->highlights() ) );
     xmlWriter->writeTextElement( "gradientEnabled",         QString( "%1" ).arg( receipt->isGradientEnabled() ) );
@@ -3535,11 +3805,15 @@ void MainWindow::writeXmlElementsToFile(QXmlStreamWriter *xmlWriter, ReceiptSett
     xmlWriter->writeTextElement( "gradientLength",          QString( "%1" ).arg( receipt->gradientLength() ) );
     xmlWriter->writeTextElement( "gradientAngle",           QString( "%1" ).arg( receipt->gradientAngle() ) );
     xmlWriter->writeTextElement( "sharpen",                 QString( "%1" ).arg( receipt->sharpen() ) );
+    xmlWriter->writeTextElement( "sharpenMasking",          QString( "%1" ).arg( receipt->shMasking() ) );
     xmlWriter->writeTextElement( "chromaBlur",              QString( "%1" ).arg( receipt->chromaBlur() ) );
     xmlWriter->writeTextElement( "highlightReconstruction", QString( "%1" ).arg( receipt->isHighlightReconstruction() ) );
     xmlWriter->writeTextElement( "camMatrixUsed",           QString( "%1" ).arg( receipt->camMatrixUsed() ) );
     xmlWriter->writeTextElement( "chromaSeparation",        QString( "%1" ).arg( receipt->isChromaSeparation() ) );
-    xmlWriter->writeTextElement( "profile",                 QString( "%1" ).arg( receipt->profile() ) );
+    //xmlWriter->writeTextElement( "profile",                 QString( "%1" ).arg( receipt->profile() ) );
+    xmlWriter->writeTextElement( "tonemap",                 QString( "%1" ).arg( receipt->tonemap() ) );
+    xmlWriter->writeTextElement( "gamut",                   QString( "%1" ).arg( receipt->gamut() ) );
+    xmlWriter->writeTextElement( "gamma",                   QString( "%1" ).arg( receipt->gamma() ) );
     xmlWriter->writeTextElement( "allowCreativeAdjustments",QString( "%1" ).arg( receipt->allowCreativeAdjustments() ) );
     xmlWriter->writeTextElement( "denoiserStrength",        QString( "%1" ).arg( receipt->denoiserStrength() ) );
     xmlWriter->writeTextElement( "denoiserWindow",          QString( "%1" ).arg( receipt->denoiserWindow() ) );
@@ -3581,6 +3855,8 @@ void MainWindow::writeXmlElementsToFile(QXmlStreamWriter *xmlWriter, ReceiptSett
     xmlWriter->writeTextElement( "vignetteShape",           QString( "%1" ).arg( receipt->vignetteShape() ) );
     xmlWriter->writeTextElement( "caRed",                   QString( "%1" ).arg( receipt->caRed() ) );
     xmlWriter->writeTextElement( "caBlue",                  QString( "%1" ).arg( receipt->caBlue() ) );
+    xmlWriter->writeTextElement( "caDesaturate",            QString( "%1" ).arg( receipt->caDesaturate() ) );
+    xmlWriter->writeTextElement( "caRadius",                QString( "%1" ).arg( receipt->caRadius() ) );
     xmlWriter->writeTextElement( "stretchFactorX",          QString( "%1" ).arg( receipt->stretchFactorX() ) );
     xmlWriter->writeTextElement( "stretchFactorY",          QString( "%1" ).arg( receipt->stretchFactorY() ) );
     xmlWriter->writeTextElement( "upsideDown",              QString( "%1" ).arg( receipt->upsideDown() ) );
@@ -3731,6 +4007,7 @@ void MainWindow::setSliders(ReceiptSettings *receipt, bool paste)
     ui->labelHueVsHue->setConfiguration( receipt->hueVsHue() );
     ui->labelHueVsSat->setConfiguration( receipt->hueVsSaturation() );
     ui->labelHueVsLuma->setConfiguration( receipt->hueVsLuminance() );
+    ui->labelLumaVsSat->setConfiguration( receipt->lumaVsSaturation() );
 
     ui->checkBoxGradientEnable->setChecked( receipt->isGradientEnabled() );
     ui->horizontalSliderExposureGradient->setValue( receipt->gradientExposure() );
@@ -3741,6 +4018,7 @@ void MainWindow::setSliders(ReceiptSettings *receipt, bool paste)
     ui->spinBoxGradientLength->setValue( receipt->gradientLength() );
 
     ui->horizontalSliderSharpen->setValue( receipt->sharpen() );
+    ui->horizontalSliderShMasking->setValue( receipt->shMasking() );
     ui->horizontalSliderChromaBlur->setValue( receipt->chromaBlur() );
 
     ui->checkBoxHighLightReconstruction->setChecked( receipt->isHighlightReconstruction() );
@@ -3751,6 +4029,17 @@ void MainWindow::setSliders(ReceiptSettings *receipt, bool paste)
 
     ui->comboBoxProfile->setCurrentIndex( receipt->profile() );
     on_comboBoxProfile_currentIndexChanged( receipt->profile() );
+    if( receipt->tonemap() != -1 )
+    {
+        ui->comboBoxTonemapFct->setCurrentIndex( receipt->tonemap() );
+        on_comboBoxTonemapFct_currentIndexChanged( receipt->tonemap() );
+    }
+    if( receipt->gamut() != -1 )
+    {
+        ui->comboBoxProcessingGamut->setCurrentIndex( receipt->gamut() );
+        on_comboBoxProcessingGamut_currentIndexChanged( receipt->gamut() );
+    }
+    ui->horizontalSliderGamma->setValue( receipt->gamma() );
 
     ui->checkBoxCreativeAdjustments->setChecked( receipt->allowCreativeAdjustments() );
     on_checkBoxCreativeAdjustments_toggled( receipt->allowCreativeAdjustments() );
@@ -3883,6 +4172,10 @@ void MainWindow::setSliders(ReceiptSettings *receipt, bool paste)
     on_horizontalSliderCaRed_valueChanged( receipt->caRed() );
     ui->horizontalSliderCaBlue->setValue( receipt->caBlue() );
     on_horizontalSliderCaBlue_valueChanged( receipt->caBlue() );
+    ui->horizontalSliderCaDesaturate->setValue( receipt->caDesaturate() );
+    on_horizontalSliderCaDesaturate_valueChanged( receipt->caDesaturate() );
+    ui->horizontalSliderCaRadius->setValue( receipt->caRadius() );
+    on_horizontalSliderCaRadius_valueChanged( receipt->caRadius() );
 
     if( !paste && !receipt->wasNeverLoaded() )
     {
@@ -3941,6 +4234,7 @@ void MainWindow::setReceipt( ReceiptSettings *receipt )
     receipt->setHueVsHue( ui->labelHueVsHue->configuration() );
     receipt->setHueVsSaturation( ui->labelHueVsSat->configuration() );
     receipt->setHueVsLuminance( ui->labelHueVsLuma->configuration() );
+    receipt->setLumaVsSaturation( ui->labelLumaVsSat->configuration() );
 
     receipt->setGradientEnabled( ui->checkBoxGradientEnable->isChecked() );
     receipt->setGradientExposure( ui->horizontalSliderExposureGradient->value() );
@@ -3951,11 +4245,15 @@ void MainWindow::setReceipt( ReceiptSettings *receipt )
     receipt->setGradientAngle( ui->dialGradientAngle->value() );
 
     receipt->setSharpen( ui->horizontalSliderSharpen->value() );
+    receipt->setShMasking( ui->horizontalSliderShMasking->value() );
     receipt->setChromaBlur( ui->horizontalSliderChromaBlur->value() );
     receipt->setHighlightReconstruction( ui->checkBoxHighLightReconstruction->isChecked() );
     receipt->setCamMatrixUsed( ui->comboBoxUseCameraMatrix->currentIndex() );
     receipt->setChromaSeparation( ui->checkBoxChromaSeparation->isChecked() );
     receipt->setProfile( ui->comboBoxProfile->currentIndex() );
+    receipt->setTonemap( ui->comboBoxTonemapFct->currentIndex() );
+    receipt->setGamut( ui->comboBoxProcessingGamut->currentIndex() );
+    receipt->setGamma( ui->horizontalSliderGamma->value() );
     receipt->setAllowCreativeAdjustments( ui->checkBoxCreativeAdjustments->isChecked() );
     receipt->setDenoiserStrength( ui->horizontalSliderDenoiseStrength->value() );
     receipt->setDenoiserWindow( ui->comboBoxDenoiseWindow->currentIndex() + 2 );
@@ -4003,6 +4301,8 @@ void MainWindow::setReceipt( ReceiptSettings *receipt )
     receipt->setVignetteShape( ui->horizontalSliderVignetteShape->value() );
     receipt->setCaRed( ui->horizontalSliderCaRed->value() );
     receipt->setCaBlue( ui->horizontalSliderCaBlue->value() );
+    receipt->setCaDesaturate( ui->horizontalSliderCaDesaturate->value() );
+    receipt->setCaRadius( ui->horizontalSliderCaRadius->value() );
 
     receipt->setStretchFactorX( getHorizontalStretchFactor(true) );
     receipt->setStretchFactorY( getVerticalStretchFactor(true) );
@@ -4045,6 +4345,7 @@ void MainWindow::replaceReceipt(ReceiptSettings *receiptTarget, ReceiptSettings 
     if( paste && cdui->checkBoxHslCurves->isChecked() )  receiptTarget->setHueVsHue( receiptSource->hueVsHue() );
     if( paste && cdui->checkBoxHslCurves->isChecked() )  receiptTarget->setHueVsSaturation( receiptSource->hueVsSaturation() );
     if( paste && cdui->checkBoxHslCurves->isChecked() )  receiptTarget->setHueVsLuminance( receiptSource->hueVsLuminance() );
+    if( paste && cdui->checkBoxHslCurves->isChecked() )  receiptTarget->setLumaVsSaturation( receiptSource->lumaVsSaturation() );
     if( paste && cdui->checkBoxShadows->isChecked() )    receiptTarget->setShadows( receiptSource->shadows() );
     if( paste && cdui->checkBoxHighlights->isChecked() ) receiptTarget->setHighlights( receiptSource->highlights() );
 
@@ -4059,13 +4360,23 @@ void MainWindow::replaceReceipt(ReceiptSettings *receiptTarget, ReceiptSettings 
         receiptTarget->setGradientAngle( receiptSource->gradientAngle() );
     }
 
-    if( paste && cdui->checkBoxSharpen->isChecked() )    receiptTarget->setSharpen( receiptSource->sharpen() );
+    if( paste && cdui->checkBoxSharpen->isChecked() )
+    {
+        receiptTarget->setSharpen( receiptSource->sharpen() );
+        receiptTarget->setShMasking( receiptSource->shMasking() );
+    }
     if( paste && cdui->checkBoxChromaBlur->isChecked() ) receiptTarget->setChromaBlur( receiptSource->chromaBlur() );
     if( paste && cdui->checkBoxHighlightReconstruction->isChecked() ) receiptTarget->setHighlightReconstruction( receiptSource->isHighlightReconstruction() );
     if( paste && cdui->checkBoxCameraMatrix->isChecked() ) receiptTarget->setCamMatrixUsed( receiptSource->camMatrixUsed() );
     if( paste && cdui->checkBoxChromaBlur->isChecked() ) receiptTarget->setChromaSeparation( receiptSource->isChromaSeparation() );
-    if( paste && cdui->checkBoxProfile->isChecked() )    receiptTarget->setProfile( receiptSource->profile() );
-    if( paste && cdui->checkBoxProfile->isChecked() )    receiptTarget->setAllowCreativeAdjustments( receiptSource->allowCreativeAdjustments() );
+    if( paste && cdui->checkBoxProfile->isChecked() )
+    {
+        receiptTarget->setProfile( receiptSource->profile() );
+        receiptTarget->setAllowCreativeAdjustments( receiptSource->allowCreativeAdjustments() );
+        receiptTarget->setTonemap( receiptSource->tonemap() );
+        receiptTarget->setGamut( receiptSource->gamut() );
+        receiptTarget->setGamma( receiptSource->gamma() );
+    }
     if( paste && cdui->checkBoxDenoise->isChecked() )    receiptTarget->setDenoiserStrength( receiptSource->denoiserStrength() );
     if( paste && cdui->checkBoxDenoise->isChecked() )    receiptTarget->setDenoiserWindow( receiptSource->denoiserWindow() );
     if( paste && cdui->checkBoxDenoise->isChecked() )    receiptTarget->setRbfDenoiserLuma( receiptSource->rbfDenoiserLuma() );
@@ -4124,6 +4435,8 @@ void MainWindow::replaceReceipt(ReceiptSettings *receiptTarget, ReceiptSettings 
         receiptTarget->setVignetteShape( receiptSource->vignetteShape() );
         receiptTarget->setCaRed( receiptSource->caRed() );
         receiptTarget->setCaBlue( receiptSource->caBlue() );
+        receiptTarget->setCaDesaturate( receiptSource->caDesaturate() );
+        receiptTarget->setCaRadius( receiptSource->caRadius() );
     }
 
     if( paste && cdui->checkBoxTransformation->isChecked() )
@@ -4216,6 +4529,7 @@ void MainWindow::addClipToExportQueue(int row, QString fileName)
     receipt->setHueVsHue( m_pSessionReceipts.at( row )->hueVsHue() );
     receipt->setHueVsSaturation( m_pSessionReceipts.at( row )->hueVsSaturation() );
     receipt->setHueVsLuminance( m_pSessionReceipts.at( row )->hueVsLuminance() );
+    receipt->setLumaVsSaturation( m_pSessionReceipts.at( row )->lumaVsSaturation() );
 
     receipt->setGradientEnabled( m_pSessionReceipts.at( row )->isGradientEnabled() );
     receipt->setGradientExposure( m_pSessionReceipts.at( row )->gradientExposure() );
@@ -4226,12 +4540,16 @@ void MainWindow::addClipToExportQueue(int row, QString fileName)
     receipt->setGradientAngle( m_pSessionReceipts.at( row )->gradientAngle() );
 
     receipt->setSharpen( m_pSessionReceipts.at( row )->sharpen() );
+    receipt->setShMasking( m_pSessionReceipts.at( row )->shMasking() );
     receipt->setChromaBlur( m_pSessionReceipts.at( row )->chromaBlur() );
     receipt->setHighlightReconstruction( m_pSessionReceipts.at( row )->isHighlightReconstruction() );
     receipt->setCamMatrixUsed( m_pSessionReceipts.at( row )->camMatrixUsed() );
     receipt->setChromaSeparation( m_pSessionReceipts.at( row )->isChromaSeparation() );
     receipt->setProfile( m_pSessionReceipts.at( row )->profile() );
     receipt->setAllowCreativeAdjustments( m_pSessionReceipts.at( row )->allowCreativeAdjustments() );
+    receipt->setTonemap( m_pSessionReceipts.at( row )->tonemap() );
+    receipt->setGamut( m_pSessionReceipts.at( row )->gamut() );
+    receipt->setGamma( m_pSessionReceipts.at( row )->gamma() );
     receipt->setDenoiserStrength( m_pSessionReceipts.at( row )->denoiserStrength() );
     receipt->setDenoiserWindow( m_pSessionReceipts.at( row )->denoiserWindow() );
     receipt->setRbfDenoiserLuma( m_pSessionReceipts.at( row )->rbfDenoiserLuma() );
@@ -4277,6 +4595,8 @@ void MainWindow::addClipToExportQueue(int row, QString fileName)
     receipt->setVignetteShape( m_pSessionReceipts.at( row )->vignetteShape() );
     receipt->setCaRed( m_pSessionReceipts.at( row )->caRed() );
     receipt->setCaBlue( m_pSessionReceipts.at( row )->caBlue() );
+    receipt->setCaDesaturate( m_pSessionReceipts.at( row )->caDesaturate() );
+    receipt->setCaRadius( m_pSessionReceipts.at( row )->caRadius() );
 
     receipt->setStretchFactorX( m_pSessionReceipts.at( row )->stretchFactorX() );
     receipt->setStretchFactorY( m_pSessionReceipts.at( row )->stretchFactorY() );
@@ -4309,9 +4629,9 @@ void MainWindow::previewPicture( int row )
 
     //Display in SessionList
     QPixmap pic = QPixmap::fromImage( QImage( ( unsigned char *) m_pRawImage, getMlvWidth(m_pMlvObject), getMlvHeight(m_pMlvObject), QImage::Format_RGB888 )
-                                      .scaled( getMlvWidth(m_pMlvObject) * devicePixelRatio() / 10.0,
-                                               getMlvHeight(m_pMlvObject) * devicePixelRatio() / 10.0,
-                                               Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation) );
+                                      .scaled( getMlvWidth(m_pMlvObject) * devicePixelRatio() / 10.0 * getHorizontalStretchFactor(true),
+                                               getMlvHeight(m_pMlvObject) * devicePixelRatio() / 10.0 * getVerticalStretchFactor(true),
+                                               Qt::IgnoreAspectRatio, Qt::SmoothTransformation) );
     pic.setDevicePixelRatio( devicePixelRatio() );
     //Take and insert item, so the scrollbar is set correctly to the size of the picture
     QListWidgetItem *item = ui->listWidgetSession->takeItem( row );
@@ -4875,32 +5195,36 @@ void MainWindow::on_actionAbout_triggered()
         QString pic = QString("<img width='128' height='112' align='right' src=\"data:image/png;base64,") + byteArray.toBase64() + "\"/>";
 
         QMessageBox::about( this, QString( "About %1" ).arg( APPNAME ),
-                                QString(
-                                  "<html>%1"
-                                  "<body><h3>%2</h3>"
-                                  " <p>%2 v%3</p>"
-                                  " <p>%4</p>"
-                                  " <p>See <a href='%5'>this site</a> for more information.</p>"
-                                  " <p>Darkstyle Copyright (c) 2017, <a href='%6'>Juergen Skrotzky</a> under MIT</p>"
-                                  " <p>Some icons by <a href='%7'>Double-J Design</a> under <a href='%8'>CC4.0</a></p>"
-                                  " <p>Autoupdater Copyright (c) 2016, <a href='%9'>Violet Giraffe</a> under MIT</p>"
-                                  " <p>Zhang-Wu LMMSE Image Demosaicking by Pascal Getreuer under <a href='%10'>BSD</a>.</p>"
-                                  " <p>QRecentFilesMenu Copyright (c) 2011 by Morgan Leborgne under <a href='%11'>MIT</a>.</p>"
-                                  " <p>Recursive bilateral filtering developed by Qingxiong Yang under <a href='%12'>MIT</a> and Ming under <a href='%13'>MIT</a>.</p>"
-                                  " </body></html>" )
-                                 .arg( pic ) //1
-                                 .arg( APPNAME ) //2
-                                 .arg( VERSION ) //3
-                                 .arg( "by Ilia3101, bouncyball, Danne & masc." ) //4
-                                 .arg( "https://github.com/ilia3101/MLV-App" ) //5
-                                 .arg( "https://github.com/Jorgen-VikingGod" ) //6
-                                 .arg( "http://www.doublejdesign.co.uk/" ) //7
-                                 .arg( "https://creativecommons.org/licenses/by/4.0/" ) //8
-                                 .arg( "https://github.com/VioletGiraffe/github-releases-autoupdater" ) //9
-                                 .arg( "http://www.opensource.org/licenses/bsd-license.html" ) //10
-                                 .arg( "https://github.com/mojocorp/QRecentFilesMenu/blob/master/LICENSE" ) //11
-                                 .arg( "https://github.com/ufoym/recursive-bf/blob/master/LICENSE" ) //12
-                                 .arg( "https://github.com/Fig1024/OP_RBF/blob/master/LICENSE" ) ); //13
+                                  QString(
+                                    "<html>%1"
+                                    "<body><h3>%2</h3>"
+                                    " <p>%2 v%3</p>"
+                                    " <p>%4</p>"
+                                    " <p>See <a href='%5'>this site</a> for more information.</p>"
+                                    " <p>Darkstyle Copyright (c) 2017, <a href='%6'>Juergen Skrotzky</a> under MIT</p>"
+                                    " <p>Some icons by <a href='%7'>Double-J Design</a> under <a href='%8'>CC4.0</a></p>"
+                                    " <p>Autoupdater Copyright (c) 2016, <a href='%9'>Violet Giraffe</a> under MIT</p>"
+                                    " <p>Zhang-Wu LMMSE Image Demosaicking by Pascal Getreuer under <a href='%10'>BSD</a>.</p>"
+                                    " <p>QRecentFilesMenu Copyright (c) 2011 by Morgan Leborgne under <a href='%11'>MIT</a>.</p>"
+                                    " <p>Recursive bilateral filtering developed by Qingxiong Yang under <a href='%12'>MIT</a> and Ming under <a href='%13'>MIT</a>.</p>"
+                                    " <p>AVIR image resizing algorithm designed by Aleksey Vaneev under <a href='%14'>MIT</a>.</p>"
+                                    " <p>Sobel filter Copyright 2018 Pedro Melgueira under <a href='%15'>Apache 2.0</a>.</p>"
+                                    " </body></html>" )
+                                   .arg( pic ) //1
+                                   .arg( APPNAME ) //2
+                                   .arg( VERSION ) //3
+                                   .arg( "by Ilia3101, bouncyball, Danne & masc." ) //4
+                                   .arg( "https://github.com/ilia3101/MLV-App" ) //5
+                                   .arg( "https://github.com/Jorgen-VikingGod" ) //6
+                                   .arg( "http://www.doublejdesign.co.uk/" ) //7
+                                   .arg( "https://creativecommons.org/licenses/by/4.0/" ) //8
+                                   .arg( "https://github.com/VioletGiraffe/github-releases-autoupdater" ) //9
+                                   .arg( "http://www.opensource.org/licenses/bsd-license.html" ) //10
+                                   .arg( "https://github.com/mojocorp/QRecentFilesMenu/blob/master/LICENSE" ) //11
+                                   .arg( "https://github.com/ufoym/recursive-bf/blob/master/LICENSE" ) //12
+                                   .arg( "https://github.com/Fig1024/OP_RBF/blob/master/LICENSE" ) //13
+                                   .arg( "https://github.com/avaneev/avir/blob/master/LICENSE" ) //14
+                                   .arg( "https://github.com/petermlm/SobelFilter/blob/master/LICENSE" ) ); //15
 }
 
 //Qt Infobox
@@ -4930,6 +5254,14 @@ void MainWindow::on_actionClip_Information_triggered()
 {
     if( !m_pInfoDialog->isVisible() ) m_pInfoDialog->show();
     else m_pInfoDialog->hide();
+}
+
+void MainWindow::on_horizontalSliderGamma_valueChanged(int position)
+{
+    double value = position / 100.0;
+    processingSetGamma( m_pProcessingObject, value );
+    ui->label_GammaVal->setText( QString("%1").arg( value, 0, 'f', 2 ) );
+    m_frameChanged = true;
 }
 
 void MainWindow::on_horizontalSliderExposure_valueChanged(int position)
@@ -5073,6 +5405,19 @@ void MainWindow::on_horizontalSliderSharpen_valueChanged(int position)
     processingSetSharpening( m_pProcessingObject, position / 100.0 );
     ui->label_Sharpen->setText( QString("%1").arg( position ) );
     m_frameChanged = true;
+
+    bool enable = true;
+    if( position == 0 ) enable = false;
+    ui->label_ShMasking->setEnabled( enable );
+    ui->label_ShMaskingText->setEnabled( enable );
+    ui->horizontalSliderShMasking->setEnabled( enable );
+}
+
+void MainWindow::on_horizontalSliderShMasking_valueChanged(int position)
+{
+    processingSetSharpenMasking( m_pProcessingObject, position );
+    ui->label_ShMasking->setText( QString("%1").arg( position ) );
+    m_frameChanged = true;
 }
 
 void MainWindow::on_horizontalSliderChromaBlur_valueChanged(int position)
@@ -5179,6 +5524,20 @@ void MainWindow::on_horizontalSliderCaBlue_valueChanged(int position)
 
     resetMlvCache( m_pMlvObject );
     resetMlvCachedFrame( m_pMlvObject );
+    m_frameChanged = true;
+}
+
+void MainWindow::on_horizontalSliderCaDesaturate_valueChanged(int position)
+{
+    processingSetCaDesaturate( m_pProcessingObject, position );
+    ui->label_CaDesaturateVal->setText( QString("%1").arg( position ) );
+    m_frameChanged = true;
+}
+
+void MainWindow::on_horizontalSliderCaRadius_valueChanged(int position)
+{
+    processingSetCaRadius( m_pProcessingObject, position );
+    ui->label_CaRadiusVal->setText( QString("%1").arg( position ) );
     m_frameChanged = true;
 }
 
@@ -5416,6 +5775,13 @@ void MainWindow::on_horizontalSliderSharpen_doubleClicked()
     delete sliders;
 }
 
+void MainWindow::on_horizontalSliderShMasking_doubleClicked()
+{
+    ReceiptSettings *sliders = new ReceiptSettings(); //default
+    ui->horizontalSliderShMasking->setValue( sliders->shMasking() );
+    delete sliders;
+}
+
 void MainWindow::on_horizontalSliderChromaBlur_doubleClicked()
 {
     ReceiptSettings *sliders = new ReceiptSettings(); //default
@@ -5504,6 +5870,20 @@ void MainWindow::on_horizontalSliderCaBlue_doubleClicked()
 {
     ReceiptSettings *sliders = new ReceiptSettings(); //default
     ui->horizontalSliderCaBlue->setValue( sliders->caBlue() );
+    delete sliders;
+}
+
+void MainWindow::on_horizontalSliderCaDesaturate_doubleClicked()
+{
+    ReceiptSettings *sliders = new ReceiptSettings(); //default
+    ui->horizontalSliderCaDesaturate->setValue( sliders->caDesaturate() );
+    delete sliders;
+}
+
+void MainWindow::on_horizontalSliderCaRadius_doubleClicked()
+{
+    ReceiptSettings *sliders = new ReceiptSettings(); //default
+    ui->horizontalSliderCaRadius->setValue( sliders->caRadius() );
     delete sliders;
 }
 
@@ -5700,12 +6080,35 @@ void MainWindow::on_actionExport_triggered()
     else
     {
         //Folder Dialog
-        QString folderName = QFileDialog::getExistingDirectory(this, tr("Chose Export Folder"),
+        QString folderName = QFileDialog::getExistingDirectory(this, tr("Choose Export Folder"),
                                                           QFileInfo( saveFileName ).absolutePath(),
                                                           QFileDialog::ShowDirsOnly
                                                           | QFileDialog::DontResolveSymlinks);
 
         if( folderName.length() == 0 ) return;
+
+        QStringList overwriteList;
+        for( int row = 0; row < ui->listWidgetSession->count(); row++ )
+        {
+            if( !ui->listWidgetSession->item( row )->isSelected() ) continue;
+            QString fileName = ui->listWidgetSession->item( row )->text().replace( ".mlv", fileEnding, Qt::CaseInsensitive );
+            fileName.prepend( "/" );
+            fileName.prepend( folderName );
+
+            if( QFileInfo( fileName ).exists() ) overwriteList.append( fileName );
+        }
+        if( !overwriteList.empty() )
+        {
+            //qDebug() << "Files will be overwritten:" << overwriteList;
+            OverwriteListDialog *listDialog = new OverwriteListDialog( this );
+            listDialog->ui->listWidget->addItems( overwriteList );
+            if( !listDialog->exec() )
+            {
+                delete listDialog;
+                return;
+            }
+            delete listDialog;
+        }
 
         //Save last path for next time
         m_lastExportPath = folderName;
@@ -5775,7 +6178,12 @@ void MainWindow::on_comboBoxUseCameraMatrix_currentIndexChanged(int index)
             break;
         default: break;
     }
+
     if( index != 0 && !m_inOpeningProcess ) on_horizontalSliderTemperature_valueChanged( ui->horizontalSliderTemperature->value() );
+
+    ui->label_Gamut->setEnabled( (bool)index );
+    ui->comboBoxProcessingGamut->setEnabled( (bool)index );
+
     m_frameChanged = true;
 }
 
@@ -5784,12 +6192,12 @@ void MainWindow::on_checkBoxCreativeAdjustments_toggled(bool checked)
 {
     if( checked )
     {
-        ui->checkBoxCreativeAdjustments->setIcon( QIcon( ":/RetinaIMG/RetinaIMG/Status-dialog-warning-icon.png" ) );
+        //ui->checkBoxCreativeAdjustments->setIcon( QIcon( ":/RetinaIMG/RetinaIMG/Status-dialog-warning-icon.png" ) );
         processingAllowCreativeAdjustments( m_pProcessingObject );
     }
     else
     {
-        ui->checkBoxCreativeAdjustments->setIcon( QIcon() );
+        //ui->checkBoxCreativeAdjustments->setIcon( QIcon() );
         processingDontAllowCreativeAdjustments( m_pProcessingObject );
     }
     if( ui->checkBoxCreativeAdjustments->isEnabled() ) enableCreativeAdjustments( checked );
@@ -5812,25 +6220,45 @@ void MainWindow::on_checkBoxChromaSeparation_toggled(bool checked)
 //Chose profile
 void MainWindow::on_comboBoxProfile_currentIndexChanged(int index)
 {
+    if( index == 0 ) return;
+    ui->comboBoxProfile->setCurrentIndex( 0 );
+    index--;
+
     processingSetImageProfile(m_pProcessingObject, index);
     m_frameChanged = true;
     //Disable parameters if log
-    bool enable = true;
-    if( ( index == PROFILE_ALEXA_LOG )
-     || ( index == PROFILE_CINEON_LOG )
-     || ( index == PROFILE_SONY_LOG_3 )
-     || ( index == PROFILE_SRGB )
-     || ( index == PROFILE_REC709 )
-     || ( index == PROFILE_BMDFILM ) )
-    {
-        enable = false;
-    }
-    else
-    {
-        ui->checkBoxCreativeAdjustments->setChecked( false );
-    }
-    ui->checkBoxCreativeAdjustments->setEnabled( !enable );
-    enableCreativeAdjustments( enable || ui->checkBoxCreativeAdjustments->isChecked() );
+    ui->checkBoxCreativeAdjustments->blockSignals( true );
+    ui->checkBoxCreativeAdjustments->setChecked( processingGetAllowedCreativeAdjustments( m_pProcessingObject ) );
+    ui->checkBoxCreativeAdjustments->setEnabled( true );
+    enableCreativeAdjustments( processingGetAllowedCreativeAdjustments( m_pProcessingObject ) );
+    ui->checkBoxCreativeAdjustments->blockSignals( false );
+    ui->comboBoxTonemapFct->blockSignals( true );
+    ui->comboBoxTonemapFct->setCurrentIndex( processingGetTonemappingFunction( m_pProcessingObject ) );
+    ui->comboBoxTonemapFct->blockSignals( false );
+    ui->comboBoxProcessingGamut->blockSignals( true );
+    ui->comboBoxProcessingGamut->setCurrentIndex( processingGetGamut( m_pProcessingObject ) );
+    ui->comboBoxProcessingGamut->blockSignals( false );
+    ui->horizontalSliderGamma->setValue( processingGetGamma( m_pProcessingObject ) * 100 );
+}
+
+//Chose profile, without changing the index
+void MainWindow::on_comboBoxProfile_activated(int index)
+{
+    on_comboBoxProfile_currentIndexChanged( index );
+}
+
+//Choose Tonemapping Function
+void MainWindow::on_comboBoxTonemapFct_currentIndexChanged(int index)
+{
+    processingSetTonemappingFunction( m_pProcessingObject, index );
+    m_frameChanged = true;
+}
+
+//Choose Processing Gamut
+void MainWindow::on_comboBoxProcessingGamut_currentIndexChanged(int index)
+{
+    processingSetGamut( m_pProcessingObject, index );
+    m_frameChanged = true;
 }
 
 //Switch on/off all creative adjustment elements
@@ -5843,6 +6271,11 @@ void MainWindow::enableCreativeAdjustments( bool enable )
     ui->horizontalSliderLighten->setEnabled( enable );
     ui->horizontalSliderVibrance->setEnabled( enable );
     ui->horizontalSliderSaturation->setEnabled( enable );
+    ui->horizontalSliderContrast->setEnabled( enable );
+    ui->horizontalSliderClarity->setEnabled( enable );
+    ui->horizontalSliderHighlights->setEnabled( enable );
+    ui->horizontalSliderShadows->setEnabled( enable );
+    ui->horizontalSliderContrastGradient->setEnabled( enable );
     ui->label_LsVal->setEnabled( enable );
     ui->label_LrVal->setEnabled( enable );
     ui->label_DsVal->setEnabled( enable );
@@ -5850,6 +6283,11 @@ void MainWindow::enableCreativeAdjustments( bool enable )
     ui->label_LightenVal->setEnabled( enable );
     ui->label_VibranceVal->setEnabled( enable );
     ui->label_SaturationVal->setEnabled( enable );
+    ui->label_ContrastVal->setEnabled( enable );
+    ui->label_ClarityVal->setEnabled( enable );
+    ui->label_HighlightsVal->setEnabled( enable );
+    ui->label_ShadowsVal->setEnabled( enable );
+    ui->label_ContrastGradientVal->setEnabled( enable );
     ui->label_ls->setEnabled( enable );
     ui->label_lr->setEnabled( enable );
     ui->label_ds->setEnabled( enable );
@@ -5857,6 +6295,11 @@ void MainWindow::enableCreativeAdjustments( bool enable )
     ui->label_lighten->setEnabled( enable );
     ui->label_vibrance->setEnabled( enable );
     ui->label_saturation->setEnabled( enable );
+    ui->label_contrast->setEnabled( enable );
+    ui->label_clarity->setEnabled( enable );
+    ui->label_highlights->setEnabled( enable );
+    ui->label_shadows->setEnabled( enable );
+    ui->label_contrast_gradient->setEnabled( enable );
     ui->groupBoxHsl->setEnabled( enable );
     ui->groupBoxToning->setEnabled( enable );
     ui->label_gradationcurves->setEnabled( enable );
@@ -5975,43 +6418,29 @@ void MainWindow::on_actionUseBilinear_triggered()
 //Use LMMSE debayer
 void MainWindow::on_actionUseLmmseDebayer_triggered()
 {
-    /* Use LMMSE */
-    setMlvUseLmmseDebayer( m_pMlvObject );
-
-    disableMlvCaching( m_pMlvObject );
-
-    llrpResetFpmStatus(m_pMlvObject);
-    llrpResetBpmStatus(m_pMlvObject);
-    llrpComputeStripesOn(m_pMlvObject);
-    m_frameChanged = true;
+    selectDebayerAlgorithm();
+    return;
 }
 
 //Use IGV debayer
 void MainWindow::on_actionUseIgvDebayer_triggered()
 {
-    /* Use IGV */
-    setMlvUseIgvDebayer( m_pMlvObject );
+    selectDebayerAlgorithm();
+    return;
+}
 
-    disableMlvCaching( m_pMlvObject );
-
-    llrpResetFpmStatus(m_pMlvObject);
-    llrpResetBpmStatus(m_pMlvObject);
-    llrpComputeStripesOn(m_pMlvObject);
-    m_frameChanged = true;
+//Use AHD debayer
+void MainWindow::on_actionUseAhdDebayer_triggered()
+{
+    selectDebayerAlgorithm();
+    return;
 }
 
 //Use AMaZE or not
 void MainWindow::on_actionAlwaysUseAMaZE_triggered()
 {
-    /* Use AMaZE */
-    setMlvAlwaysUseAmaze( m_pMlvObject );
-
-    disableMlvCaching( m_pMlvObject );
-
-    llrpResetFpmStatus(m_pMlvObject);
-    llrpResetBpmStatus(m_pMlvObject);
-    llrpComputeStripesOn(m_pMlvObject);
-    m_frameChanged = true;
+    selectDebayerAlgorithm();
+    return;
 }
 
 //En-/Disable Caching
@@ -6026,6 +6455,13 @@ void MainWindow::on_actionCaching_triggered()
     llrpResetBpmStatus(m_pMlvObject);
     llrpComputeStripesOn(m_pMlvObject);
     m_frameChanged = true;
+}
+
+//Use same debayer for playback like in edit panel
+void MainWindow::on_actionDontSwitchDebayerForPlayback_triggered()
+{
+    selectDebayerAlgorithm();
+    return;
 }
 
 //Select the codec
@@ -6047,7 +6483,6 @@ void MainWindow::on_actionExportSettings_triggered()
                                                                       m_audioExportEnabled,
                                                                       m_resizeFilterHeightLocked,
                                                                       m_smoothFilterSetting,
-                                                                      m_resizeFilterAlgorithm,
                                                                       m_hdrExport );
     pExportSettings->exec();
     m_codecProfile = pExportSettings->encoderSetting();
@@ -6061,7 +6496,6 @@ void MainWindow::on_actionExportSettings_triggered()
     m_audioExportEnabled = pExportSettings->isExportAudioEnabled();
     m_resizeFilterHeightLocked = pExportSettings->isHeightLocked();
     m_smoothFilterSetting = pExportSettings->smoothSetting();
-    m_resizeFilterAlgorithm = pExportSettings->scaleAlgorithm();
     m_hdrExport = pExportSettings->hdrBlending();
     delete pExportSettings;
 
@@ -6323,7 +6757,7 @@ void MainWindow::on_listWidgetSession_customContextMenuRequested(const QPoint &p
         else if( ui->listWidgetSession->selectedItems().size() > 1 )
         {
             myMenu.addAction( ui->actionPasteReceipt );
-            myMenu.addAction( QIcon( ":/RetinaIMG/RetinaIMG/Delete-icon.png" ), "Delete Selected File from Session",  this, SLOT( deleteFileFromSession() ) );
+            myMenu.addAction( QIcon( ":/RetinaIMG/RetinaIMG/Delete-icon.png" ), "Delete Selected Files from Session",  this, SLOT( deleteFileFromSession() ) );
             myMenu.addSeparator();
         }
     }
@@ -6337,10 +6771,35 @@ void MainWindow::deleteFileFromSession( void )
 {
     //Save slider receipt
     setReceipt( m_pSessionReceipts.at( m_lastActiveClipInSession ) );
+
+    //Ask for options
+    int delFile = QMessageBox::question( this, tr( "%1 - Remove clip" ).arg( APPNAME ), tr( "Remove clip from session, or delete clip from disk?" ), tr( "Remove" ), tr( "Delete from Disk" ), tr( "Abort" ) );
+    if( delFile == 2 ) return; //Abort
+
     //If multiple selection is on, we need to erase all selected items
     for( int i = ui->listWidgetSession->selectedItems().size(); i > 0; i-- )
     {
         int row = ui->listWidgetSession->row( ui->listWidgetSession->selectedItems().at( i - 1 ) );
+        //Delete file from disk when wanted
+        if( delFile == 1 )
+        {
+            //MLV
+#ifdef Q_OS_WIN //On windows the file has to be closed before beeing able to move to trash
+            m_fileLoaded = false;
+            m_dontDraw = true;
+            freeMlvObject( m_pMlvObject );
+            m_pMlvObject = initMlvObject();
+#endif
+            if( MoveToTrash( m_pSessionReceipts.at(row)->fileName() ) ) QMessageBox::critical( this, tr( "%1 - Delete clip from disk" ).arg( APPNAME ), tr( "Delete clip failed!" ) );
+            //MAPP
+            QString mappName = m_pSessionReceipts.at(row)->fileName();
+            mappName.chop( 4 );
+            mappName.append( ".MAPP" );
+            if( QFileInfo( mappName ).exists() )
+            {
+                if( MoveToTrash( mappName ) ) QMessageBox::critical( this, tr( "%1 - Delete MAPP file from disk" ).arg( APPNAME ), tr( "Delete MAPP file failed!" ) );
+            }
+        }
         //Remove item from Session List
         delete ui->listWidgetSession->selectedItems().at( i - 1 );
         //Remove slider memory
@@ -6392,6 +6851,7 @@ void MainWindow::pictureCustomContextMenuRequested(const QPoint &pos)
     myMenu.addAction( ui->actionZoom100 );
     myMenu.addSeparator();
     myMenu.addMenu( ui->menuDemosaicForPlayback );
+    myMenu.addAction( ui->actionBetterResizer );
     myMenu.addSeparator();
     myMenu.addAction( ui->actionShowZebras );
     if( ui->actionFullscreen->isChecked() )
@@ -6423,6 +6883,15 @@ void MainWindow::on_labelScope_customContextMenuRequested(const QPoint &pos)
     myMenu.addAction( ui->actionShowVectorScope );
     // Show context menu at handling position
     myMenu.exec( globalPos );
+}
+
+//DoubleClick on Gamma Label
+void MainWindow::on_label_GammaVal_doubleClicked()
+{
+    EditSliderValueDialog editSlider;
+    editSlider.autoSetup( ui->horizontalSliderGamma, ui->label_GammaVal, 0.01, 2, 100.0 );
+    editSlider.exec();
+    ui->horizontalSliderGamma->setValue( editSlider.getValue() );
 }
 
 //DoubleClick on Exposure Label
@@ -6580,6 +7049,15 @@ void MainWindow::on_label_Sharpen_doubleClicked()
     ui->horizontalSliderSharpen->setValue( editSlider.getValue() );
 }
 
+//DoubleClick on Sharpen Masking Label
+void MainWindow::on_label_ShMasking_doubleClicked()
+{
+    EditSliderValueDialog editSlider;
+    editSlider.autoSetup( ui->horizontalSliderShMasking, ui->label_ShMasking, 1.0, 0, 1.0 );
+    editSlider.exec();
+    ui->horizontalSliderShMasking->setValue( editSlider.getValue() );
+}
+
 //DoubleClick on ChromaBlur Label
 void MainWindow::on_label_ChromaBlur_doubleClicked()
 {
@@ -6701,6 +7179,24 @@ void MainWindow::on_label_CaBlueVal_doubleClicked()
     editSlider.autoSetup( ui->horizontalSliderCaBlue, ui->label_CaBlueVal, 10.0, 1, 10.0 );
     editSlider.exec();
     ui->horizontalSliderCaBlue->setValue( editSlider.getValue() );
+}
+
+//DoubleClick on CA desaturate Label
+void MainWindow::on_label_CaDesaturateVal_doubleClicked()
+{
+    EditSliderValueDialog editSlider;
+    editSlider.autoSetup( ui->horizontalSliderCaDesaturate, ui->label_CaDesaturateVal, 1.0, 0, 1.0 );
+    editSlider.exec();
+    ui->horizontalSliderCaDesaturate->setValue( editSlider.getValue() );
+}
+
+//DoubleClick on CA radius Label
+void MainWindow::on_label_CaRadiusVal_doubleClicked()
+{
+    EditSliderValueDialog editSlider;
+    editSlider.autoSetup( ui->horizontalSliderCaRadius, ui->label_CaRadiusVal, 1.0, 0, 1.0 );
+    editSlider.exec();
+    ui->horizontalSliderCaRadius->setValue( editSlider.getValue() );
 }
 
 void MainWindow::on_label_RawWhiteVal_doubleClicked()
@@ -6934,6 +7430,12 @@ void MainWindow::exportHandler( void )
 //Play button pressed
 void MainWindow::on_actionPlay_triggered(bool checked)
 {
+    //Last frame? Go to first frame!
+    if( checked && ui->horizontalSliderPosition->value()+1 >= ui->spinBoxCutOut->value() )
+    {
+        on_actionGoto_First_Frame_triggered();
+    }
+
     //If no audio, we have nothing to do here
     if( !doesMlvHaveAudio( m_pMlvObject ) ) return;
 
@@ -7235,6 +7737,13 @@ void MainWindow::on_toolButtonHueVsLumaReset_clicked()
     ui->labelHueVsLuma->paintElement();
 }
 
+//Reset LumaVsSat curve
+void MainWindow::on_toolButtonLumaVsSatReset_clicked()
+{
+    ui->labelLumaVsSat->resetLine();
+    ui->labelLumaVsSat->paintElement();
+}
+
 //Goto next frame
 void MainWindow::on_actionNextFrame_triggered()
 {
@@ -7508,6 +8017,13 @@ void MainWindow::on_groupBoxDebayer_toggled(bool arg1)
     else ui->groupBoxDebayer->setMaximumHeight( 16777215 );
 }
 
+void MainWindow::on_groupBoxProfiles_toggled(bool arg1)
+{
+    ui->frameProfiles->setVisible( arg1 );
+    if( !arg1 ) ui->groupBoxProfiles->setMaximumHeight( 30 );
+    else ui->groupBoxProfiles->setMaximumHeight( 16777215 );
+}
+
 //Collapse & Expand Processing
 void MainWindow::on_groupBoxProcessing_toggled(bool arg1)
 {
@@ -7662,10 +8178,39 @@ void MainWindow::drawFrameReady()
         }
         else
         {
-            m_pGraphicsItem->setPixmap( QPixmap::fromImage( QImage( ( unsigned char *) m_pRawImage, getMlvWidth(m_pMlvObject), getMlvHeight(m_pMlvObject), QImage::Format_RGB888 )
-                                              .scaled( getMlvWidth(m_pMlvObject) * getHorizontalStretchFactor(false),
-                                                       getMlvHeight(m_pMlvObject) * getVerticalStretchFactor(false),
-                                                       Qt::IgnoreAspectRatio, mode) ) );
+            QPixmap pixmap;
+            //Qvir resize
+            if( mode == Qt::SmoothTransformation && ui->actionBetterResizer->isChecked() )
+            {
+                uint8_t *scaledPic = (uint8_t*)malloc( 3 * getMlvWidth(m_pMlvObject) * getHorizontalStretchFactor(false)
+                                                         * getMlvHeight(m_pMlvObject) * getVerticalStretchFactor(false)
+                                                         * sizeof( uint8_t ) );
+                avir_scale_thread_pool scaling_pool;
+                avir::CImageResizerVars vars; vars.ThreadPool = &scaling_pool;
+                avir::CImageResizerParamsUltra roptions;
+                avir::CImageResizer<> image_resizer( 8, 0, roptions );
+                image_resizer.resizeImage( m_pRawImage,
+                                           getMlvWidth(m_pMlvObject),
+                                           getMlvHeight(m_pMlvObject), 0,
+                                           scaledPic,
+                                           getMlvWidth(m_pMlvObject) * getHorizontalStretchFactor(false),
+                                           getMlvHeight(m_pMlvObject) * getVerticalStretchFactor(false),
+                                           3, 0, &vars );
+                pixmap = QPixmap::fromImage( QImage( ( unsigned char *) scaledPic,
+                                                     getMlvWidth(m_pMlvObject) * getHorizontalStretchFactor(false),
+                                                     getMlvHeight(m_pMlvObject) * getVerticalStretchFactor(false),
+                                                     QImage::Format_RGB888 ) );
+                free( scaledPic );
+            }
+            //Qt resize
+            else
+            {
+                pixmap = QPixmap::fromImage( QImage( ( unsigned char *) m_pRawImage, getMlvWidth(m_pMlvObject), getMlvHeight(m_pMlvObject), QImage::Format_RGB888 )
+                                             .scaled( getMlvWidth(m_pMlvObject) * getHorizontalStretchFactor(false),
+                                                      getMlvHeight(m_pMlvObject) * getVerticalStretchFactor(false),
+                                                      Qt::IgnoreAspectRatio, mode) );
+            }
+            m_pGraphicsItem->setPixmap( pixmap );
             m_pScene->setSceneRect( 0, 0, getMlvWidth(m_pMlvObject) * getHorizontalStretchFactor(false), getMlvHeight(m_pMlvObject) * getVerticalStretchFactor(false) );
         }
     }
@@ -8594,7 +9139,7 @@ void MainWindow::selectDebayerAlgorithm()
     if( m_inOpeningProcess ) return;
 
     //If no playback active change debayer to receipt settings
-    if( !ui->actionPlay->isChecked() )
+    if( !ui->actionPlay->isChecked() || ui->actionDontSwitchDebayerForPlayback->isChecked() )
     {
         switch( ui->comboBoxDebayer->currentIndex() )
         {
@@ -8646,6 +9191,30 @@ void MainWindow::selectDebayerAlgorithm()
             disableMlvCaching( m_pMlvObject );
             m_pChosenDebayer->setText( tr( "Bilinear" ) );
         }
+        else if( ui->actionUseLmmseDebayer->isChecked() )
+        {
+            setMlvUseLmmseDebayer( m_pMlvObject );
+            disableMlvCaching( m_pMlvObject );
+            m_pChosenDebayer->setText( tr( "LMMSE" ) );
+        }
+        else if( ui->actionUseIgvDebayer->isChecked() )
+        {
+            setMlvUseIgvDebayer( m_pMlvObject );
+            disableMlvCaching( m_pMlvObject );
+            m_pChosenDebayer->setText( tr( "IGV" ) );
+        }
+        else if( ui->actionUseAhdDebayer->isChecked() )
+        {
+            setMlvUseAhdDebayer( m_pMlvObject );
+            disableMlvCaching( m_pMlvObject );
+            m_pChosenDebayer->setText( tr( "AHD" ) );
+        }
+        else if( ui->actionAlwaysUseAMaZE->isChecked() )
+        {
+            setMlvAlwaysUseAmaze( m_pMlvObject );
+            disableMlvCaching( m_pMlvObject );
+            m_pChosenDebayer->setText( tr( "AMaZE" ) );
+        }
         else if( ui->actionCaching->isChecked() )
         {
             setMlvAlwaysUseAmaze( m_pMlvObject );
@@ -8654,8 +9223,36 @@ void MainWindow::selectDebayerAlgorithm()
         }
         ///@todo: ADD HERE OTHER CACHED DEBAYERS! AND ADD SOME SPECIAL TRICK FOR CACHING
     }
+    while( !m_pRenderThread->isIdle() ) QThread::msleep(1);
     llrpResetFpmStatus(m_pMlvObject);
     llrpResetBpmStatus(m_pMlvObject);
     llrpComputeStripesOn(m_pMlvObject);
     m_frameChanged = true;
+}
+
+//Enable/Disable AVIR resizer in viewer
+void MainWindow::on_actionBetterResizer_triggered()
+{
+    m_frameChanged = true;
+}
+
+//Show a list of installed fpm files
+void MainWindow::on_actionShowInstalledFocusPixelMaps_triggered()
+{
+    PixelMapListDialog fpmDialog;
+    if( m_fileLoaded )
+    {
+        fpmDialog.showFpm( m_pMlvObject );
+    }
+    fpmDialog.exec();
+}
+
+//Open a window which uses raw2mlv binary
+void MainWindow::on_actionTranscodeAndImport_triggered()
+{
+    TranscodeDialog *pTranscode = new TranscodeDialog( this );
+    pTranscode->exec();
+    QStringList list = pTranscode->importList();
+    openMlvSet( list );
+    delete pTranscode;
 }

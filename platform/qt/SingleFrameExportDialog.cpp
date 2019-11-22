@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QDebug>
+#include "avir/avirthreadpool.h"
 
 //Constructor
 SingleFrameExportDialog::SingleFrameExportDialog(QWidget *parent,
@@ -75,19 +76,29 @@ void SingleFrameExportDialog::exportViaQt()
     //File name proposal
     QString saveFileName = m_fileName;
     saveFileName = saveFileName.left( saveFileName.lastIndexOf( "." ) );
-    saveFileName.append( QString( "_frame_%1.png" ).arg( m_frameNr + 1 ) );
+    if( ui->comboBoxCodec->currentIndex() == 2 )
+        saveFileName.append( QString( "_frame_%1.png" ).arg( m_frameNr + 1 ) );
+    else
+        saveFileName.append( QString( "_frame_%1.jpg" ).arg( m_frameNr + 1 ) );
 
     //But take the folder from last export
     saveFileName = QString( "%1/%2" ).arg( m_lastPath ).arg( QFileInfo( saveFileName ).fileName() );
 
     //File Dialog
-    QString fileName = QFileDialog::getSaveFileName( this, tr("Export..."),
-                                                    saveFileName,
-                                                    "8bit PNG (*.png)" );
+    QString fileName;
+    if( ui->comboBoxCodec->currentIndex() == 2 )
+        fileName = QFileDialog::getSaveFileName( this, tr("Export..."),
+                                                 saveFileName,
+                                                 "8bit PNG (*.png)" );
+    else
+        fileName = QFileDialog::getSaveFileName( this, tr("Export..."),
+                                                 saveFileName,
+                                                 "8bit JPG (*.jpg)" );
 
     //Exit if not an PNG file or aborted
     if( fileName == QString( "" )
-            || !fileName.endsWith( ".png", Qt::CaseInsensitive ) ) return;
+            || !( fileName.endsWith( ".png", Qt::CaseInsensitive )
+               || fileName.endsWith( ".jpg", Qt::CaseInsensitive ) ) ) return;
 
     //Save last path for next time
     m_lastPath = QFileInfo( fileName ).absolutePath();
@@ -96,10 +107,27 @@ void SingleFrameExportDialog::exportViaQt()
     uint8_t *pRawImage = (uint8_t*)malloc( 3 * getMlvWidth(m_pMlvObject) * getMlvHeight(m_pMlvObject) * sizeof( uint8_t ) );
     getMlvProcessedFrame8( m_pMlvObject, m_frameNr, pRawImage, 1 );
 
-    QImage( ( unsigned char *) pRawImage, getMlvWidth(m_pMlvObject), getMlvHeight(m_pMlvObject), QImage::Format_RGB888 )
-            .scaled( getMlvWidth(m_pMlvObject) * stretchX, getMlvHeight(m_pMlvObject) * stretchY,
-                     Qt::IgnoreAspectRatio, Qt::SmoothTransformation )
-            .save( fileName, "png", -1 );
+    uint8_t * imgBufferScaled8;
+    imgBufferScaled8 = ( uint8_t* )malloc( getMlvWidth(m_pMlvObject) * stretchX * getMlvHeight(m_pMlvObject) * stretchY * 3 * sizeof( uint8_t ) );
+
+    avir_scale_thread_pool scaling_pool;
+    avir::CImageResizerVars vars; vars.ThreadPool = &scaling_pool;
+    avir::CImageResizerParamsUltra roptions;
+    avir::CImageResizer<> image_resizer( 8, 0, roptions );
+    image_resizer.resizeImage( pRawImage,
+                                getMlvWidth(m_pMlvObject),
+                                getMlvHeight(m_pMlvObject), 0,
+                                imgBufferScaled8,
+                                getMlvWidth(m_pMlvObject) * stretchX,
+                                getMlvHeight(m_pMlvObject) * stretchY,
+                                3, 0, &vars );
+
+    if( ui->comboBoxCodec->currentIndex() == 2 )
+        QImage( ( unsigned char *) imgBufferScaled8, getMlvWidth(m_pMlvObject) * stretchX, getMlvHeight(m_pMlvObject) * stretchY, QImage::Format_RGB888 )
+                .save( fileName, "png", -1 );
+    else
+        QImage( ( unsigned char *) imgBufferScaled8, getMlvWidth(m_pMlvObject) * stretchX, getMlvHeight(m_pMlvObject) * stretchY, QImage::Format_RGB888 )
+                .save( fileName, "jpg", -1 );
 
     free( pRawImage );
 }

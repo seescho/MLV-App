@@ -323,6 +323,7 @@ static inline void interpolate_around(uint16_t * image_data, int i, int w, int *
 /* following code is for bad/focus pixel processing **********************************************/
 enum pattern { PATTERN_NONE = 0,
                PATTERN_EOSM = 331,
+               PATTERN_EOSM2 = 355,
                PATTERN_650D = 301,
                PATTERN_700D = 326,
                PATTERN_100D = 346
@@ -982,6 +983,9 @@ static int fpm_get_pattern(uint32_t camera_model)
         case 0x80000331:
             return PATTERN_EOSM;
 
+        case 0x80000355:
+            return PATTERN_NONE;//PATTERN_EOSM2; //none, until fpm generation is implemented
+
         case 0x80000346:
             return PATTERN_100D;
 
@@ -1471,6 +1475,7 @@ mem_err:
 
 void reset_fpm_status(pixel_map * focus_pixel_map, int * fpm_status)
 {
+    if( !focus_pixel_map ) return;
     *fpm_status = 0;
     focus_pixel_map->count = 0;
     focus_pixel_map->capacity = 0;
@@ -1483,6 +1488,7 @@ void reset_fpm_status(pixel_map * focus_pixel_map, int * fpm_status)
 
 void reset_bpm_status(pixel_map * bad_pixel_map, int * bpm_status)
 {
+    if( !bad_pixel_map ) return;
     *bpm_status = 0;
     bad_pixel_map->count = 0;
     bad_pixel_map->capacity = 0;

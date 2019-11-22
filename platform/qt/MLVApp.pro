@@ -5,6 +5,7 @@
 #-------------------------------------------------
 
 QT       += core gui multimedia
+CONFIG   += c++14
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -61,7 +62,7 @@ win32: LIBS += -llibgomp-1
 # Linux
 linux-g++*: QMAKE_CFLAGS += -O3 -fopenmp -msse4.1 -mssse3 -msse3 -msse2 -msse -std=c99
 linux-g++*: QMAKE_CXXFLAGS += -fopenmp
-linux-g++*: LIBS += -L/usr/lib/gcc/x86_64-linux-gnu/4.8 -lgomp
+linux-g++*: LIBS += -lgomp
 
 ##############
 SOURCES += \
@@ -137,7 +138,15 @@ SOURCES += \
     ../../src/processing/rbfilter/rbf_wrapper.cpp \
     HueVsDiagram.cpp \
     ../../src/processing/rbfilter/RBFilterPlain.cpp \
-    ../../src/debayer/wb_conversion.c
+    ../../src/debayer/wb_conversion.c \
+    ../../src/processing/sobel/sobel.c \
+    MoveToTrash.cpp \
+    OverwriteListDialog.cpp \
+    PixelMapListDialog.cpp \
+    ../../src/processing/cafilter/ColorAberrationCorrection.c \
+    NoScrollSpinBox.cpp \
+    NoScrollComboBox.cpp \
+    TranscodeDialog.cpp
 
 macx: SOURCES += ../cocoa/avf_lib/avf_lib.m
 
@@ -229,7 +238,18 @@ HEADERS += \
     ../../src/processing/rbfilter/rbf_wrapper.h \
     ../../src/processing/rbfilter/rbf.h \
     ../../src/processing/rbfilter/RBFilterPlain.h \
-    FpmInstaller.h
+    FpmInstaller.h \
+    ../../src/processing/sobel/sobel.h \
+    avir/avir.h \
+    MoveToTrash.h \
+    OverwriteListDialog.h \
+    avir/avirthreadpool.h \
+    avir/ThreadPool.h \
+    PixelMapListDialog.h \
+    ../../src/processing/cafilter/ColorAberrationCorrection.h \
+    NoScrollSpinBox.h \
+    NoScrollComboBox.h \
+    TranscodeDialog.h
 
 macx: HEADERS += \
     ../cocoa/avf_lib/avencoder.h \
@@ -247,7 +267,10 @@ FORMS += \
     FcpxmlSelectDialog.ui \
     ReceiptCopyMaskDialog.ui \
     UserManualDialog.ui \
-    SingleFrameExportDialog.ui
+    SingleFrameExportDialog.ui \
+    OverwriteListDialog.ui \
+    PixelMapListDialog.ui \
+    TranscodeDialog.ui
 
 RESOURCES += \
     ressources.qrc \
@@ -285,7 +308,10 @@ PACKAGE_FILES.path = Contents/MacOS
 QMAKE_BUNDLE_DATA += PACKAGE_FILES
 #unpack & install ffmpeg on OSX
 macx: QMAKE_POST_LINK += unzip -o ../qt/FFmpeg/ffmpegOSX.zip $$escape_expand(\n\t)
-macx: QMAKE_POST_LINK += "mv ffmpeg MLV\ App.app/Contents/MacOS/"
+macx: QMAKE_POST_LINK += "mv ffmpeg MLV\ App.app/Contents/MacOS/" $$escape_expand(\n\t)
+#unpack & install raw2mlv on OSX
+macx: QMAKE_POST_LINK += unzip -o ../qt/raw2mlv/raw2mlvOSX.zip $$escape_expand(\n\t)
+macx: QMAKE_POST_LINK += "mv raw2mlv MLV\ App.app/Contents/MacOS/" $$escape_expand(\n\t)
 
 unix{
     OBJECTS_DIR = .obj
@@ -304,7 +330,8 @@ linux-g++ {
 
     INSTALLS += target desktop icon512
 
-    QMAKE_POST_LINK += tar -C $$(HOME)/bin -xvJf $$_PRO_FILE_PWD_/FFmpeg/ffmpegLinux.tar.xz --strip-components=1 --wildcards */ffmpeg
+    QMAKE_POST_LINK += tar -C $$(HOME)/bin -xvJf $$_PRO_FILE_PWD_/FFmpeg/ffmpegLinux.tar.xz --strip-components=1 --wildcards */ffmpeg $$escape_expand(\n\t)
+    QMAKE_POST_LINK += tar -C $$(HOME)/bin -xvJf $$_PRO_FILE_PWD_/raw2mlv/raw2mlvLinux.tar.xz --strip-components=1 --wildcards */raw2mlv $$escape_expand(\n\t)
 }
 
 #for using linuxdeployqt
@@ -314,7 +341,10 @@ linux-g++ {
 #    DEFINES += APP_IMAGE
 
 #    QMAKE_POST_LINK += tar -C ../qt/FFmpeg/ -xvJf ../qt/FFmpeg/ffmpegLinux.tar.xz --strip=1 --wildcards */ffmpeg $$escape_expand(\n\t)
-#    QMAKE_POST_LINK += chmod a+x ../qt/FFmpeg/ffmpeg
+#    QMAKE_POST_LINK += chmod a+x ../qt/FFmpeg/ffmpeg $$escape_expand(\n\t)
+
+#    QMAKE_POST_LINK += tar -C ../qt/raw2mlv/ -xvJf ../qt/raw2mlv/raw2mlvLinux.tar.xz --strip=1 --wildcards */raw2mlv $$escape_expand(\n\t)
+#    QMAKE_POST_LINK += chmod a+x ../qt/raw2mlv/raw2mlv $$escape_expand(\n\t)
 
 #    isEmpty(PREFIX) {
 #        PREFIX = /usr

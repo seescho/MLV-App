@@ -17,6 +17,7 @@
 // Adapted to PhotoFlow 08/2014
 // Adapted to MLVApp by masc 07/2018
 
+#include <stdlib.h>
 #include <math.h>
 #include "sleefsseavx.c"
 #include "debayer.h"
@@ -28,7 +29,7 @@
 #define MAX1(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define LIMIT16(X) MAX1(MIN1(X, 65535), 0)
 
-#ifndef WIN32
+//#ifndef WIN32
 #define MIN(a,b) \
 ({ __typeof__ ((a)+(b)) _a = (a); \
 __typeof__ ((a)+(b)) _b = (b); \
@@ -44,14 +45,14 @@ _a > _b ? _a : _b; })
 _a * _a; })
 
 #define min MIN
-#else
-
-#define MIN min
-#define MAX max
-#define SQR(a) (a*a)
-
-
-#endif
+//#else
+//
+//#define MIN min
+//#define MAX max
+//#define SQR(a) (a*a)
+//
+//
+//#endif
 
 
 /* adapted from rt_math.h */

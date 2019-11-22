@@ -1,11 +1,11 @@
 # :fire::fire::fire: MLV App :fire::fire::fire:
 What is MLV App? Lightroom, but for Magic Lantern MLV Video (and open source and cross platform)
 
-![MLV App](https://user-images.githubusercontent.com/30245296/54157389-7f902d00-4448-11e9-85cd-0db57a9ba9af.png)
+![MLV App](https://user-images.githubusercontent.com/30245296/64981183-c8bfae80-d8bb-11e9-9b0c-cd1f8041953f.png)
 
-Find the latest releases [here](https://ilia3101.github.io/MLV-App/). Download, unpack and start.
+Find the latest official releases [here](https://ilia3101.github.io/MLV-App/). Download, unpack and start. Find debian packages [here](http://phd-sid.ethz.ch/debian/mlv-app/) (thanks to @alexmyczko).
 
-A very first version of a kind of user manual can be found [here](https://github.com/ilia3101/MLV-App/wiki). A nice tutorial video with subtitles can be found [here](https://www.youtube.com/watch?v=X17jzHjuHOo) in russian and [here](https://www.youtube.com/watch?v=-mmnG5uBJok) in english (thanks to Maksim Danilov).
+A user manual can be found [here](https://github.com/ilia3101/MLV-App/wiki) and in-app. A nice tutorial video with subtitles can be found [here](https://www.youtube.com/watch?v=X17jzHjuHOo) in russian and [here](https://www.youtube.com/watch?v=-mmnG5uBJok) in english (thanks to Maksim Danilov).
 
 ## Features :collision:
 - Import MLV files
@@ -40,14 +40,14 @@ A very first version of a kind of user manual can be found [here](https://github
 - Audio only export
 - Clip trimming support (Cut In and Cut Out) for any export mode (ffmpeg, AVFoundation, cDNG, MLV) including audio syncing with correct timecode.
 - Frame rate override for export and playback
-- Aspect Ratio: stretch width (1.33x, 1.5x, 1.75x, 1.8x, 2.0x) and height (0.3x, 1.67x, 3.0x, 5.0x auto detected for latest MLVs) for playback and (ffmpeg & DNG) export per clip in session. Manually changed AR is inserted to exported cDNG header.
+- Aspect Ratio: stretch width (1.33x, 1.5x, 1.75x, 1.8x, 2.0x) and height (0.3x, 1.67x, 3.0x, 5.0x auto detected for latest MLVs) for playback and export per clip in session. Manually changed AR is inserted to exported cDNG header.
 - Upside down transformation
 - Resize frame resolution for (batch) export
 - Clip batch export
 - Smooth artifacts filter (minimizes moiree) for all ffmpeg export codecs, realized by ffmpeg filter combination
 - 2D median denoiser (don't expect wonders!)
 - Recursive bilateral filter (works as denoiser) with Luminance, Chroma and Range parameter
-- Vignette effect / correction and chromatic abberation correction
+- Vignette effect / correction with variable shape and chromatic abberation correction
 - Post export scripting on macOS (thx @dannephoto)
 - Zoom: fit to screen, 100% and free zoom, scroll through picture
 - Zebras
@@ -61,7 +61,6 @@ A very first version of a kind of user manual can be found [here](https://github
 - install XCode depending on your OSX
 - install Qt5 (minimum 5.6)
 - open `platform/qt/MLVApp.pro` in QtCreator
-- go to tab project, add command line argument -j4 (for quad core) 
 - Build and Start
 - OR download and doubleclick easy-to-use [compiler app](https://bitbucket.org/Dannephoto/mlv_app_compiler/downloads/mlv_app_compiler.dmg) from @dannephoto
 
@@ -69,7 +68,6 @@ A very first version of a kind of user manual can be found [here](https://github
 - install Qt5 (minimum 5.6) with MinGW compiler
 - unpack ffmpegWin.zip in `platform/qt/FFmpeg` (and copy it later into build directory)
 - open `platform/qt/MLVApp.pro` in QtCreator
-- go to tab project, add command line argument -j4 (for quad core) 
 - Build and Start
 
 #### Qt App Linux (generally)

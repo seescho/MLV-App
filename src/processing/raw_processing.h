@@ -11,6 +11,44 @@ processingObject_t * initProcessingObject();
 void freeProcessingObject(processingObject_t * processing);
 
 
+/* Set processing gamut */
+void processingSetGamut(processingObject_t * processing, int gamut);
+int processingGetGamut(processingObject_t * processing);
+#define GAMUT_Rec709 0
+#define GAMUT_Rec2020 1
+#define GAMUT_ACES_AP0 2
+#define GAMUT_AdobeRGB 3
+#define GAMUT_ProPhotoRGB 4
+#define GAMUT_XYZ 5
+#define GAMUT_AlexaWideGamutRGB 6
+#define GAMUT_SonySGamut3 7
+#define GAMUT_BmdFilm 8
+
+
+/* Tonemapping function, really this can be a tonemapping function, a log
+ * function or any other gamma or transfer function */
+void processingSetTonemappingFunction(processingObject_t * processing, int function);
+int processingGetTonemappingFunction(processingObject_t * processing);
+#define TONEMAP_None 0
+#define TONEMAP_Reinhard 1
+#define TONEMAP_Tangent 2
+#define TONEMAP_AlexaLogC 3
+#define TONEMAP_CineonLog 4
+#define TONEMAP_SonySLog 5
+#define TONEMAP_sRGB 6
+#define TONEMAP_Rec709 7
+#define TONEMAP_HLG 8
+#define TONEMAP_BMDFilm 9
+#define TONEMAP_Reinhard_3_5 10 /* Reinhard 3/5 */
+
+
+
+/* why does gradient have a gamma  */
+void processingSetGamma(processingObject_t * processing, double gammaValue);
+#define processingGetGamma(processing) (processing)->gamma_power
+void processingSetGammaGradient(processingObject_t * processing, double gammaValue);
+
+
 
 /* Set one of default image profiles */
 void processingSetImageProfile(processingObject_t * processing, int imageProfile);
@@ -18,7 +56,6 @@ void processingSetImageProfile(processingObject_t * processing, int imageProfile
 #define PROFILE_STANDARD    0   /* Gamma Corrected */
 #define PROFILE_TONEMAPPED  1   /* Gamma Corrected + Tonemapped */
 #define PROFILE_FILM        2   /* Gamma Corrected + inverse tangent tonemap */
-// #define PROFILE_CANON_LOG   2   /* Canon C-Log (commented out - not working) */
 #define PROFILE_ALEXA_LOG   3   /* Alexa log (A form of Log-C) */
 #define PROFILE_CINEON_LOG  4   /* Cineon Log */
 #define PROFILE_SONY_LOG_3  5   /* Sony S-Log 3 */
@@ -26,9 +63,6 @@ void processingSetImageProfile(processingObject_t * processing, int imageProfile
 #define PROFILE_SRGB        7	/* sRGB */
 #define PROFILE_REC709      8	/* Rec. 709 (HDTV) */
 #define PROFILE_BMDFILM     9   /* BMDFilm */
-
-/* Set a custom image profile using the image_profile struct */
-void processingSetCustomImageProfile(processingObject_t * processing, image_profile_t * imageProfile);
 
 
 
@@ -87,7 +121,8 @@ void processingSetSharpening(processingObject_t * processing, double sharpen);
 /* Set direction bias... 0=equal, -1=horizontal, 1=vertical */
 void processingSetSharpeningBias(processingObject_t * processing, double bias);
 #define processingGetSharpeningBias(processing) (processing)->sharpen_bias
-
+/* Set sharpen masking, 0..100 */
+#define processingSetSharpenMasking(processing, value) (processing)->sh_masking = (value)
 
 
 /* 3-way correction, range of saturation and hue is 0.0-1.0 (Currently not doing anything) */
@@ -138,11 +173,6 @@ void processingSetSimpleContrastGradient(processingObject_t * processing, double
 #define processingGetSimpleContrastGradient(processing) (processing)->gradient_contrast
 /* Calculate gradient contrast exposure LUT */
 void processing_update_contrast_curve_gradient(processingObject_t * processing);
-
-/* Just don't touch this or keep at ~2.2 (or more for a lighter image) */
-void processingSetGamma(processingObject_t * processing, double gammaValue);
-#define processingGetGamma(processing) (processing)->gamma_power
-void processingSetGammaGradient(processingObject_t * processing, double gammaValue);
 
 
 /* Enable/disable highlight reconstruction */
@@ -230,6 +260,10 @@ void processingSetGCurve(processingObject_t * processing, int num, float * pXin,
 
 /* Set Hue vs. Luma curve */
 void processingSetHueVsCurves(processingObject_t * processing, int num, float * pXin, float * pYin, uint8_t channel);
+
+/* Set CA filter parameter */
+#define processingSetCaDesaturate(processing, value) (processing)->ca_desaturate = (value)
+#define processingSetCaRadius(processing, value) (processing)->ca_radius = (value)
 
 /*
  *******************************************************************************

@@ -206,7 +206,6 @@ int getMlvRawFrameUint16(mlvObject_t * video, uint64_t frameIndex, uint16_t * un
 
     /* How many bytes is RAW frame */
     int raw_frame_size = (width * height * bitdepth) / 8;
-
     /* Memory buffer for original RAW data */
     uint8_t * raw_frame = (uint8_t *)malloc(raw_frame_size + 4); // additional 4 bytes for safety
 
@@ -367,16 +366,33 @@ void setMlvProcessing(mlvObject_t * video, processingObject_t * processing)
     }
 
     /* Get camera matrices, daylight and tungsten */
-    double cam_matrix_D[9], cam_matrix_A[9];
-    int32_t * cam_matrix_D_int = camidGetColorMatrix2(getMlvCameraModel(video));
-    int32_t * cam_matrix_A_int = camidGetColorMatrix1(getMlvCameraModel(video));
-    for (int i = 0; i < 9; ++i)
+    if (camidCheckIfCameraKnown(getMlvCameraModel(video)))
     {
-        cam_matrix_D[i] = ((double)cam_matrix_D_int[i*2])/((double)cam_matrix_D_int[i*2+1]);
-        cam_matrix_A[i] = ((double)cam_matrix_A_int[i*2])/((double)cam_matrix_A_int[i*2+1]);
-    }
+        double cam_matrix_D[9], cam_matrix_A[9];
+        int32_t * cam_matrix_D_int = camidGetColorMatrix2(getMlvCameraModel(video));
+        int32_t * cam_matrix_A_int = camidGetColorMatrix1(getMlvCameraModel(video));
+        for (int i = 0; i < 9; ++i)
+        {
+            cam_matrix_D[i] = ((double)cam_matrix_D_int[i*2])/((double)cam_matrix_D_int[i*2+1]);
+            cam_matrix_A[i] = ((double)cam_matrix_A_int[i*2])/((double)cam_matrix_A_int[i*2+1]);
+        }
 
-    processingSetCamMatrix(processing, cam_matrix_D, cam_matrix_A);
+        processingSetCamMatrix(processing, cam_matrix_D, cam_matrix_A);
+    }
+    else
+    {
+        /* If the camera is unknown, get matrix from the MLV matrix field.
+         * Currently, MLV only stores one matrix unfortunately, so same the same
+         * matrix will be used for tungsten and daylight. TODO: update this
+         * code once MLV has new colour matrix blocks */
+        double cam_matrix[9];
+        int32_t * mlv_mat = video->RAWI.raw_info.color_matrix1;
+        for (int i = 0; i < 9; ++i)
+        {
+            cam_matrix[i] = ((double)mlv_mat[i*2])/((double)mlv_mat[i*2+1]);
+        }
+        processingSetCamMatrix(processing, cam_matrix, cam_matrix);
+    }
 }
 
 void getMlvRawFrameDebayered(mlvObject_t * video, uint64_t frameIndex, uint16_t * outputFrame)
@@ -485,7 +501,10 @@ void getMlvProcessedFrame8(mlvObject_t * video, uint64_t frameIndex, uint8_t * o
 mlvObject_t * initMlvObjectWithClip(char * mlvPath, int preview, int * err, char * error_message)
 {
     mlvObject_t * video = initMlvObject();
-    *err = openMlvClip(video, mlvPath, preview, error_message);
+    char error_message_tmp[256];
+    int err_tmp =  openMlvClip(video, mlvPath, preview, error_message_tmp);
+    if (err != NULL) *err = err_tmp;
+    if (error_message != NULL) strcpy(error_message, error_message_tmp);
     return video;
 }
 

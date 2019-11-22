@@ -36,6 +36,7 @@ public:
     void setHueVsHue( QString curve ){m_hueVsHue = curve;}
     void setHueVsSaturation( QString curve ){m_hueVsSat = curve;}
     void setHueVsLuminance( QString curve ){m_hueVsLuma = curve;}
+    void setLumaVsSaturation( QString curve ){m_lumaVsSat = curve;}
 
     void setGradientEnabled( bool on ){m_isGradientEnabled = on;}
     void setGradientExposure( int value ){m_gradientExposure = value;}
@@ -46,6 +47,7 @@ public:
     void setGradientAngle( int value ){m_gradientAngle = value;}
 
     void setSharpen( int value )              {m_sharpen = value;}
+    void setShMasking( int value )            {m_shMasking = value;}
     void setChromaBlur( int value )           {m_chromaBlur = value;}
     void setDenoiserWindow( int value )       {m_denoiserWindow = value;}
     void setDenoiserStrength( int value )     {m_denoiserStrength = value;}
@@ -57,6 +59,9 @@ public:
     void setCamMatrixUsed( uint8_t val )      {m_useCamMatrix = val;}
     void setChromaSeparation( bool on )       {m_chromaSeparation = on;}
     void setProfile( uint8_t num )            {m_profile = num;}
+    void setTonemap( int8_t num )             {m_tonemap = num;}
+    void setGamut( int8_t num )               {m_gamut = num;}
+    void setGamma( int value )                {m_gamma = value;}
     void setAllowCreativeAdjustments( bool on ){m_creativeAdjustments = on;}
     void setRawWhite( int value )             {m_rawWhite = value;}
     void setRawBlack( int value )             {m_rawBlack = value;}
@@ -103,7 +108,9 @@ public:
     void setVignetteRadius( int value )       {m_vignetteRadius = value;}
     void setVignetteShape( int value )        {m_vignetteShape = value;}
     void setCaRed( int value )                {m_caRed = value;}
-    void setCaBlue( int value )                {m_caBlue = value;}
+    void setCaBlue( int value )               {m_caBlue = value;}
+    void setCaDesaturate( int value )         {m_caDesaturate = value;}
+    void setCaRadius( int value )             {m_caRadius = value;}
     void setCutIn( uint32_t frame )           {m_cutIn = frame;}
     void setCutOut( uint32_t frame )          {m_cutOut = frame;}
 
@@ -131,6 +138,7 @@ public:
     QString hueVsHue( void ){return m_hueVsHue;}
     QString hueVsSaturation( void ){return m_hueVsSat;}
     QString hueVsLuminance( void ){return m_hueVsLuma;}
+    QString lumaVsSaturation( void ){return m_lumaVsSat;}
 
     bool isGradientEnabled( void ){return m_isGradientEnabled;}
     int gradientExposure( void ){return m_gradientExposure;}
@@ -141,6 +149,7 @@ public:
     int gradientAngle( void ){return m_gradientAngle;}
 
     int sharpen( void )    {return m_sharpen;}
+    int shMasking( void )  {return m_shMasking;}
     int chromaBlur( void ) {return m_chromaBlur;}
     int denoiserWindow( void ){return m_denoiserWindow;}
     int denoiserStrength( void ){return m_denoiserStrength;}
@@ -191,9 +200,14 @@ public:
     int vignetteShape( void ){return m_vignetteShape;}
     int caRed( void ){return m_caRed;}
     int caBlue( void ){return m_caBlue;}
+    int caDesaturate( void ){return m_caDesaturate;}
+    int caRadius( void ){return m_caRadius;}
     uint32_t cutIn( void ) {return m_cutIn;}
     uint32_t cutOut( void ){return m_cutOut;}
     uint8_t profile( void ){return m_profile;}
+    int8_t tonemap( void ){return m_tonemap;}
+    int8_t gamut( void ){return m_gamut;}
+    int gamma( void ){return m_gamma;}
     bool allowCreativeAdjustments( void ){return m_creativeAdjustments;}
     int rawWhite( void ) {return m_rawWhite;}
     int rawBlack( void ) {return m_rawBlack;}
@@ -225,6 +239,7 @@ private:
     QString m_hueVsHue;
     QString m_hueVsSat;
     QString m_hueVsLuma;
+    QString m_lumaVsSat;
 
     bool m_isGradientEnabled;
     int m_gradientExposure;
@@ -239,8 +254,11 @@ private:
     int m_vignetteShape;
     int m_caRed;
     int m_caBlue;
+    int m_caDesaturate;
+    int m_caRadius;
 
     int m_sharpen;
+    int m_shMasking;
     int m_chromaBlur;
     int m_denoiserWindow;
     int m_denoiserStrength;
@@ -289,6 +307,9 @@ private:
     uint32_t m_cutIn;
     uint32_t m_cutOut;
     uint8_t m_profile;
+    int8_t m_tonemap;
+    int8_t m_gamut;
+    int m_gamma;
     bool m_creativeAdjustments;
     int m_rawWhite;
     int m_rawBlack;

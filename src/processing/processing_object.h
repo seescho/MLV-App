@@ -54,19 +54,15 @@ typedef struct {
     float hue_vs_hue[36000];
     float hue_vs_saturation[36000];
     float hue_vs_luma[36000];
+    float luma_vs_saturation[36000];
     uint8_t hue_vs_hue_used;
     uint8_t hue_vs_saturation_used;
     uint8_t hue_vs_luma_used;
+    uint8_t luma_vs_saturation_used;
 
     /* toning */
     float toning_dry;
     float toning_wet[3];
-
-    /* Do tonemapping? */
-    int tone_mapping;
-    /* Pick any tonemapping function */
-    double (* tone_mapping_function)(double);
-
 
     /* Camera's matrix - will need to be set on opening clip, default set for 5D Mark II */
     double cam_matrix[9];
@@ -141,7 +137,7 @@ typedef struct {
     double     midtone_sat;
     double     shadow_sat;
 
-    /* Gamma should be ~2.2 technically, but highger values look ok too */
+    /* Gamma power, applied after "tonemapping" function */
     double     gamma_power;
     /* Limited to 0.0 - 0.6 range */
     double     lighten;
@@ -149,6 +145,7 @@ typedef struct {
     /* Sharpen: 0.0-1.0 range; default 0 */
     double     sharpen;
     double     sharpen_bias; /* 0=equal, -1=horizontal, 1=vertical */
+    uint8_t    sh_masking; /*0..100, no mask .. full mask*/
 
     /* For whitebalance */
     double     wb_multipliers[3];
@@ -157,7 +154,7 @@ typedef struct {
      * will be calculated on setting changes, values 0-65535 */
     uint16_t   pre_calc_curve_r[65536];
     uint16_t   pre_calc_curve_g[65536];
-    uint16_t   pre_calc_curve_b[65536]; int use_rgb_curves; /* The r, g and b curves can be disabled */
+    uint16_t   pre_calc_curve_b[65536];
     uint16_t   pre_calc_levels[65536]; /* For black level and white level */
     uint16_t   pre_calc_gamma[65536];
     uint16_t   pre_calc_gamma_gradient[65536];
@@ -165,7 +162,7 @@ typedef struct {
     uint16_t   pre_calc_sharp_x[65536]; /* In horizontal dimension */
     uint16_t   pre_calc_sharp_y[65536]; /* In vertical dimension */
     /* Precalculated values for saturation */
-    int32_t    pre_calc_sat[131072]; int use_saturation; /* Saturation is disable-able */
+    int32_t    pre_calc_sat[131072];
     /* Precalculated values for vibrance */
     int32_t    pre_calc_vibrance[131072];
 
@@ -201,9 +198,15 @@ typedef struct {
 
     /* Use Camera Matrix */
     uint8_t    use_cam_matrix;
+    uint8_t    colour_gamut;
+    uint8_t    tonemap_function;
 
     /* Allow creative adjustments with log profile */
     uint8_t    allow_creative_adjustments;
+
+    /* CA filter */
+    uint8_t ca_desaturate; /* Range 0..100 */
+    uint8_t ca_radius; /* Range 0.. */
 } processingObject_t;
 
 #endif

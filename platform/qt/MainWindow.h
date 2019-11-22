@@ -65,12 +65,14 @@ private slots:
     void openMlvSet( QStringList list );
     void timerFrameEvent( void );
     void on_actionOpen_triggered();
+    void on_actionTranscodeAndImport_triggered();
     void on_actionFcpxmlImportAssistant_triggered();
     void on_actionFcpxmlSelectionAssistant_triggered();
     void on_actionAbout_triggered();
     void on_actionAboutQt_triggered();
     void on_horizontalSliderPosition_valueChanged(int position);
     void on_actionClip_Information_triggered();
+    void on_horizontalSliderGamma_valueChanged(int position);
     void on_horizontalSliderExposure_valueChanged(int position);
     void on_horizontalSliderExposureGradient_valueChanged(int position);
     void on_horizontalSliderContrast_valueChanged(int position);
@@ -88,6 +90,7 @@ private slots:
     void on_horizontalSliderShadows_valueChanged(int position);
     void on_horizontalSliderHighlights_valueChanged(int position);
     void on_horizontalSliderSharpen_valueChanged(int position);
+    void on_horizontalSliderShMasking_valueChanged(int position);
     void on_horizontalSliderChromaBlur_valueChanged(int position);
     void on_horizontalSliderDenoiseStrength_valueChanged(int position);
     void on_horizontalSliderRbfDenoiseLuma_valueChanged(int position);
@@ -101,6 +104,8 @@ private slots:
     void on_horizontalSliderVignetteShape_valueChanged(int position);
     void on_horizontalSliderCaRed_valueChanged(int position);
     void on_horizontalSliderCaBlue_valueChanged(int position);
+    void on_horizontalSliderCaDesaturate_valueChanged(int position);
+    void on_horizontalSliderCaRadius_valueChanged(int position);
     void on_horizontalSliderRawWhite_valueChanged(int position);
     void on_horizontalSliderRawBlack_valueChanged(int position);
     void on_horizontalSliderTone_valueChanged(int position);
@@ -128,6 +133,7 @@ private slots:
     void on_horizontalSliderShadows_doubleClicked();
     void on_horizontalSliderHighlights_doubleClicked();
     void on_horizontalSliderSharpen_doubleClicked();
+    void on_horizontalSliderShMasking_doubleClicked();
     void on_horizontalSliderChromaBlur_doubleClicked();
     void on_horizontalSliderDenoiseStrength_doubleClicked();
     void on_horizontalSliderRbfDenoiseLuma_doubleClicked();
@@ -141,6 +147,8 @@ private slots:
     void on_horizontalSliderVignetteShape_doubleClicked();
     void on_horizontalSliderCaRed_doubleClicked();
     void on_horizontalSliderCaBlue_doubleClicked();
+    void on_horizontalSliderCaDesaturate_doubleClicked();
+    void on_horizontalSliderCaRadius_doubleClicked();
     void on_horizontalSliderRawWhite_doubleClicked();
     void on_horizontalSliderRawBlack_doubleClicked();
     void on_horizontalSliderTone_doubleClicked();
@@ -159,6 +167,9 @@ private slots:
     void on_checkBoxCreativeAdjustments_toggled(bool checked);
     void on_checkBoxChromaSeparation_toggled(bool checked);
     void on_comboBoxProfile_currentIndexChanged(int index);
+    void on_comboBoxProfile_activated(int index);
+    void on_comboBoxTonemapFct_currentIndexChanged(int index);
+    void on_comboBoxProcessingGamut_currentIndexChanged(int index);
     void on_comboBoxFilterName_currentIndexChanged(int index);
     void on_comboBoxDenoiseWindow_currentIndexChanged(int index);
     void on_actionZoomFit_triggered(bool on);
@@ -172,8 +183,10 @@ private slots:
     void on_actionUseBilinear_triggered();
     void on_actionUseLmmseDebayer_triggered();
     void on_actionUseIgvDebayer_triggered();
+    void on_actionUseAhdDebayer_triggered();
     void on_actionAlwaysUseAMaZE_triggered();
     void on_actionCaching_triggered();
+    void on_actionDontSwitchDebayerForPlayback_triggered();
     void on_actionExportSettings_triggered();
     void on_actionResetReceipt_triggered();
     void on_actionCopyRecept_triggered();
@@ -190,6 +203,8 @@ private slots:
     void on_actionDeleteSelectedClips_triggered();
     void on_actionHelp_triggered();
     void on_actionCreateAllMappFilesNow_triggered();
+    void on_actionBetterResizer_triggered();
+    void on_actionShowInstalledFocusPixelMaps_triggered();
     void on_listWidgetSession_activated(const QModelIndex &index);
     void on_dockWidgetSession_visibilityChanged(bool visible);
     void on_dockWidgetEdit_visibilityChanged(bool visible);
@@ -202,6 +217,7 @@ private slots:
     void selectAllFiles( void );
     void pictureCustomContextMenuRequested(const QPoint &pos);
     void on_labelScope_customContextMenuRequested(const QPoint &pos);
+    void on_label_GammaVal_doubleClicked( void );
     void on_label_ExposureVal_doubleClicked( void );
     void on_label_ExposureGradient_doubleClicked( void );
     void on_label_ContrastVal_doubleClicked( void );
@@ -219,6 +235,7 @@ private slots:
     void on_label_ShadowsVal_doubleClicked( void );
     void on_label_HighlightsVal_doubleClicked( void );
     void on_label_Sharpen_doubleClicked( void );
+    void on_label_ShMasking_doubleClicked( void );
     void on_label_ChromaBlur_doubleClicked( void );
     void on_label_DenoiseStrength_doubleClicked( void );
     void on_label_RbfDenoiseLuma_doubleClicked( void );
@@ -233,6 +250,8 @@ private slots:
     void on_label_VignetteShapeVal_doubleClicked( void );
     void on_label_CaRedVal_doubleClicked( void );
     void on_label_CaBlueVal_doubleClicked( void );
+    void on_label_CaDesaturateVal_doubleClicked( void );
+    void on_label_CaRadiusVal_doubleClicked( void );
     void on_label_RawWhiteVal_doubleClicked( void );
     void on_label_RawBlackVal_doubleClicked( void );
     void on_label_ToneVal_doubleClicked( void );
@@ -269,6 +288,7 @@ private slots:
     void on_toolButtonHueVsHueReset_clicked();
     void on_toolButtonHueVsSatReset_clicked();
     void on_toolButtonHueVsLumaReset_clicked();
+    void on_toolButtonLumaVsSatReset_clicked();
     void on_actionNextFrame_triggered();
     void on_actionPreviousFrame_triggered();
     void on_checkBoxRawFixEnable_clicked(bool checked);
@@ -284,6 +304,7 @@ private slots:
     void on_groupBoxRawCorrection_toggled(bool arg1);
     void on_groupBoxCutInOut_toggled(bool arg1);
     void on_groupBoxDebayer_toggled(bool arg1);
+    void on_groupBoxProfiles_toggled(bool arg1);
     void on_groupBoxProcessing_toggled(bool arg1);
     void on_groupBoxDetails_toggled(bool arg1);
     void on_groupBoxHsl_toggled(bool arg1);
@@ -396,7 +417,6 @@ private:
     int8_t m_countTimeDown;
     bool m_resizeFilterEnabled;
     bool m_resizeFilterHeightLocked;
-    uint8_t m_resizeFilterAlgorithm;
     uint8_t m_smoothFilterSetting;
     uint16_t m_resizeWidth;
     uint16_t m_resizeHeight;

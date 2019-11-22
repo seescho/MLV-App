@@ -271,6 +271,17 @@ static camera_id_t camera_id[] = {
         { 4000000, 594 },
         2
     },
+    {
+        0x80000355,
+        {"Canon EOS M2", NULL, NULL },
+        { 9599, 10000, -3684, 10000, -398, 10000, -3364, 10000, 11398, 10000, 2237, 10000, -709,  10000, 1722, 10000, 6487, 10000 },
+        { 6400, 10000, -480,  10000, -888, 10000, -5294, 10000, 13416, 10000, 2047, 10000, -1296, 10000, 2203, 10000, 6137, 10000 },
+        { 5586, 10000, 2793,  10000, 1263, 10000, 3471,  10000, 6123,  10000, 406,  10000, 2380,  10000, 7,    10000, 5865, 10000 },
+        { 5301, 10000, 2305,  10000, 2038, 10000, 2937,  10000, 6390,  10000, 673,  10000, 1471,  10000, 7,    10000, 6772, 10000 },
+        { 5184000, 894 },
+        { 3456000, 597 },
+        2
+    },
 	{ 
 		0x80000382,
 		{ "Canon EOS 5DS", NULL, NULL },
@@ -343,6 +354,11 @@ static int camera_id_get_current_cam(uint32_t model_id)
 	return i;
 };
 
+
+int camidCheckIfCameraKnown(uint32_t cameraModel)
+{
+    return camera_id[camera_id_get_current_cam(cameraModel)].cameraModel ? 1:0;
+}
 
 const char* camidGetCameraName(uint32_t cameraModel, int camname_type)
 {

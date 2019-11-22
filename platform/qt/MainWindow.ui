@@ -25,14 +25,8 @@
     <property name="leftMargin">
      <number>0</number>
     </property>
-    <property name="topMargin">
-     <number>5</number>
-    </property>
     <property name="rightMargin">
      <number>0</number>
-    </property>
-    <property name="bottomMargin">
-     <number>5</number>
     </property>
     <item row="0" column="0">
      <widget class="GraphicsZoomView" name="graphicsView">
@@ -145,6 +139,7 @@
     <addaction name="actionCreateAllMappFilesNow"/>
     <addaction name="separator"/>
     <addaction name="actionOpen"/>
+    <addaction name="actionTranscodeAndImport"/>
     <addaction name="actionFcpxmlImportAssistant"/>
     <addaction name="actionFcpxmlSelectionAssistant"/>
     <addaction name="actionClip_Information"/>
@@ -200,7 +195,9 @@
      <addaction name="actionUseLmmseDebayer"/>
      <addaction name="actionUseIgvDebayer"/>
      <addaction name="actionAlwaysUseAMaZE"/>
+     <addaction name="actionUseAhdDebayer"/>
      <addaction name="actionCaching"/>
+     <addaction name="actionDontSwitchDebayerForPlayback"/>
     </widget>
     <addaction name="actionGoto_First_Frame"/>
     <addaction name="actionPreviousFrame"/>
@@ -216,6 +213,7 @@
     <addaction name="actionDropFrameMode"/>
     <addaction name="actionPlaybackPosition"/>
     <addaction name="menuDemosaicForPlayback"/>
+    <addaction name="actionBetterResizer"/>
     <addaction name="separator"/>
     <addaction name="actionZoomFit"/>
     <addaction name="actionZoom100"/>
@@ -262,6 +260,7 @@
     <addaction name="actionShowParade"/>
     <addaction name="actionShowVectorScope"/>
     <addaction name="actionShowZebras"/>
+    <addaction name="actionShowInstalledFocusPixelMaps"/>
     <addaction name="separator"/>
     <addaction name="menuTheme"/>
     <addaction name="separator"/>
@@ -455,9 +454,9 @@ QGroupBox::indicator:checked:disabled {
           <property name="geometry">
            <rect>
             <x>0</x>
-            <y>-39</y>
+            <y>0</y>
             <width>244</width>
-            <height>5025</height>
+            <height>5408</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayoutScrollArea">
@@ -2379,11 +2378,14 @@ QGroupBox::indicator:checked:disabled {
                   </widget>
                  </item>
                  <item row="0" column="1">
-                  <widget class="QSpinBox" name="spinBoxCutIn">
+                  <widget class="NoScrollSpinBox" name="spinBoxCutIn">
                    <property name="font">
                     <font>
                      <pointsize>10</pointsize>
                     </font>
+                   </property>
+                   <property name="focusPolicy">
+                    <enum>Qt::ClickFocus</enum>
                    </property>
                    <property name="alignment">
                     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -2430,11 +2432,14 @@ QGroupBox::indicator:checked:disabled {
                   </widget>
                  </item>
                  <item row="1" column="1">
-                  <widget class="QSpinBox" name="spinBoxCutOut">
+                  <widget class="NoScrollSpinBox" name="spinBoxCutOut">
                    <property name="font">
                     <font>
                      <pointsize>10</pointsize>
                     </font>
+                   </property>
+                   <property name="focusPolicy">
+                    <enum>Qt::ClickFocus</enum>
                    </property>
                    <property name="alignment">
                     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -2504,7 +2509,7 @@ QGroupBox::indicator:checked:disabled {
                   <number>5</number>
                  </property>
                  <item row="0" column="0">
-                  <widget class="QComboBox" name="comboBoxDebayer">
+                  <widget class="NoScrollComboBox" name="comboBoxDebayer">
                    <property name="font">
                     <font>
                      <pointsize>10</pointsize>
@@ -3693,45 +3698,35 @@ QGroupBox::indicator:checked:disabled {
                   </widget>
                  </item>
                  <item>
+                  <widget class="QCheckBox" name="checkBoxHighLightReconstruction">
+                   <property name="font">
+                    <font>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>Highlight Reconstruction</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
                   <layout class="QGridLayout" name="gridLayout_Highlights">
                    <property name="spacing">
                     <number>0</number>
                    </property>
-                   <item row="0" column="2">
-                    <spacer name="horizontalSpacer_16">
-                     <property name="orientation">
-                      <enum>Qt::Horizontal</enum>
-                     </property>
-                     <property name="sizeType">
-                      <enum>QSizePolicy::Maximum</enum>
-                     </property>
-                     <property name="sizeHint" stdset="0">
-                      <size>
-                       <width>40</width>
-                       <height>20</height>
-                      </size>
-                     </property>
-                    </spacer>
-                   </item>
-                   <item row="0" column="3">
-                    <widget class="DoubleClickLabel" name="label_HighlightsVal">
+                   <item row="1" column="0" colspan="2">
+                    <widget class="QLabel" name="label_highlights">
                      <property name="font">
                       <font>
                        <pointsize>10</pointsize>
                       </font>
                      </property>
-                     <property name="layoutDirection">
-                      <enum>Qt::RightToLeft</enum>
-                     </property>
                      <property name="text">
-                      <string>0</string>
-                     </property>
-                     <property name="alignment">
-                      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                      <string>Highlights</string>
                      </property>
                     </widget>
                    </item>
-                   <item row="1" column="0" colspan="4">
+                   <item row="2" column="0" colspan="4">
                     <widget class="NoScrollSlider" name="horizontalSliderHighlights">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -3762,15 +3757,37 @@ QGroupBox::indicator:checked:disabled {
                      </property>
                     </widget>
                    </item>
-                   <item row="0" column="0" colspan="2">
-                    <widget class="QLabel" name="label_highlights">
+                   <item row="1" column="2">
+                    <spacer name="horizontalSpacer_16">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeType">
+                      <enum>QSizePolicy::Maximum</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item row="1" column="3">
+                    <widget class="DoubleClickLabel" name="label_HighlightsVal">
                      <property name="font">
                       <font>
                        <pointsize>10</pointsize>
                       </font>
                      </property>
+                     <property name="layoutDirection">
+                      <enum>Qt::RightToLeft</enum>
+                     </property>
                      <property name="text">
-                      <string>Highlights</string>
+                      <string>0</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                      </property>
                     </widget>
                    </item>
@@ -4118,34 +4135,174 @@ QGroupBox::indicator:checked:disabled {
                    </layout>
                   </widget>
                  </item>
-                 <item>
-                  <widget class="Line" name="line_20">
-                   <property name="styleSheet">
-                    <string notr="true">background-color: rgb(115, 115, 115);</string>
+                </layout>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QGroupBox" name="groupBoxProfiles">
+             <property name="title">
+              <string>Profiles</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_63">
+              <property name="leftMargin">
+               <number>5</number>
+              </property>
+              <property name="topMargin">
+               <number>5</number>
+              </property>
+              <property name="rightMargin">
+               <number>5</number>
+              </property>
+              <property name="bottomMargin">
+               <number>5</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QFrame" name="frameProfiles">
+                <layout class="QGridLayout" name="gridLayout_62">
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="spacing">
+                  <number>5</number>
+                 </property>
+                 <item row="8" column="0">
+                  <widget class="QCheckBox" name="checkBoxCreativeAdjustments">
+                   <property name="enabled">
+                    <bool>true</bool>
                    </property>
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
+                   <property name="font">
+                    <font>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="toolTip">
+                    <string>Warning: Having creative adjustments and log profile enabled may not give logarithmic output!</string>
+                   </property>
+                   <property name="layoutDirection">
+                    <enum>Qt::LeftToRight</enum>
+                   </property>
+                   <property name="text">
+                    <string>Allow Creative Adjustments</string>
                    </property>
                   </widget>
                  </item>
-                 <item>
-                  <widget class="QCheckBox" name="checkBoxHighLightReconstruction">
+                 <item row="7" column="0">
+                  <layout class="QGridLayout" name="gridLayout_64">
+                   <property name="spacing">
+                    <number>0</number>
+                   </property>
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_GammaText">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>Gamma</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <spacer name="horizontalSpacer_58">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeType">
+                      <enum>QSizePolicy::Maximum</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item row="0" column="2">
+                    <widget class="DoubleClickLabel" name="label_GammaVal">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>1.00</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0" colspan="3">
+                    <widget class="NoScrollSlider" name="horizontalSliderGamma">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>16777215</width>
+                       <height>16777215</height>
+                      </size>
+                     </property>
+                     <property name="minimum">
+                      <number>1</number>
+                     </property>
+                     <property name="maximum">
+                      <number>400</number>
+                     </property>
+                     <property name="value">
+                      <number>100</number>
+                     </property>
+                     <property name="sliderPosition">
+                      <number>100</number>
+                     </property>
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item row="5" column="0">
+                  <widget class="QLabel" name="label_Gamut">
                    <property name="font">
                     <font>
                      <pointsize>10</pointsize>
                     </font>
                    </property>
                    <property name="text">
-                    <string>Highlight Reconstruction</string>
+                    <string>Processing Gamut</string>
                    </property>
                   </widget>
                  </item>
-                 <item>
-                  <widget class="QComboBox" name="comboBoxUseCameraMatrix">
+                 <item row="11" column="0">
+                  <widget class="NoScrollComboBox" name="comboBoxUseCameraMatrix">
                    <property name="font">
                     <font>
                      <pointsize>10</pointsize>
                     </font>
+                   </property>
+                   <property name="currentIndex">
+                    <number>1</number>
                    </property>
                    <item>
                     <property name="text">
@@ -4164,8 +4321,42 @@ QGroupBox::indicator:checked:disabled {
                    </item>
                   </widget>
                  </item>
-                 <item>
-                  <widget class="QComboBox" name="comboBoxProfile">
+                 <item row="0" column="0">
+                  <widget class="QLabel" name="label_ProcessingProfile">
+                   <property name="font">
+                    <font>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>Profile Preset</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="9" column="0">
+                  <widget class="Line" name="line_20">
+                   <property name="styleSheet">
+                    <string notr="true">background-color: rgb(115, 115, 115);</string>
+                   </property>
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel" name="label_TonemappingFunction">
+                   <property name="font">
+                    <font>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>Tonemapping Function</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="4" column="0">
+                  <widget class="NoScrollComboBox" name="comboBoxTonemapFct">
                    <property name="minimumSize">
                     <size>
                      <width>0</width>
@@ -4178,8 +4369,86 @@ QGroupBox::indicator:checked:disabled {
                     </font>
                    </property>
                    <property name="currentText">
-                    <string>Standard</string>
+                    <string>None</string>
                    </property>
+                   <item>
+                    <property name="text">
+                     <string>None</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Reinhard</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Tangent</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Alexa Log C</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Cineon Log</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Sony S Log</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>sRGB</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Rec. 709</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>HLG</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>BMDFilm</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Reinhard 3/5</string>
+                    </property>
+                   </item>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="NoScrollComboBox" name="comboBoxProfile">
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="font">
+                    <font>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="currentText">
+                    <string>Select Preset...</string>
+                   </property>
+                   <item>
+                    <property name="text">
+                     <string>Select Preset...</string>
+                    </property>
+                   </item>
                    <item>
                     <property name="text">
                      <string>Standard</string>
@@ -4232,24 +4501,93 @@ QGroupBox::indicator:checked:disabled {
                    </item>
                   </widget>
                  </item>
-                 <item>
-                  <widget class="QCheckBox" name="checkBoxCreativeAdjustments">
-                   <property name="enabled">
-                    <bool>false</bool>
+                 <item row="6" column="0">
+                  <widget class="NoScrollComboBox" name="comboBoxProcessingGamut">
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
                    </property>
                    <property name="font">
                     <font>
                      <pointsize>10</pointsize>
                     </font>
                    </property>
-                   <property name="toolTip">
-                    <string>Warning: Having creative adjustments and log profile enabled may not give logarithmic output!</string>
+                   <property name="currentText">
+                    <string>Rec. 709</string>
                    </property>
-                   <property name="layoutDirection">
-                    <enum>Qt::LeftToRight</enum>
+                   <item>
+                    <property name="text">
+                     <string>Rec. 709</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Rec. 2020</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>ACES AP0</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Adobe RGB</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Pro Photo RGB</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>XYZ</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Alexa Wide Gamut RGB</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Sony S Gamut 3</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>BMDFilm</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>ACES AP1</string>
+                    </property>
+                   </item>
+                  </widget>
+                 </item>
+                 <item row="2" column="0">
+                  <widget class="Line" name="line_27">
+                   <property name="styleSheet">
+                    <string notr="true">background-color: rgb(115, 115, 115);</string>
+                   </property>
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="10" column="0">
+                  <widget class="QLabel" name="label_39">
+                   <property name="font">
+                    <font>
+                     <pointsize>10</pointsize>
+                    </font>
                    </property>
                    <property name="text">
-                    <string>Allow Creative Adjustments</string>
+                    <string>Camera Matrix</string>
                    </property>
                   </widget>
                  </item>
@@ -4392,6 +4730,84 @@ QGroupBox::indicator:checked:disabled {
                   </layout>
                  </item>
                  <item>
+                  <layout class="QGridLayout" name="gridLayout_61">
+                   <property name="spacing">
+                    <number>0</number>
+                   </property>
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_ShMaskingText">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>Masking</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <spacer name="horizontalSpacer_57">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeType">
+                      <enum>QSizePolicy::Maximum</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item row="0" column="2">
+                    <widget class="DoubleClickLabel" name="label_ShMasking">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>0</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0" colspan="3">
+                    <widget class="NoScrollSlider" name="horizontalSliderShMasking">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>16777215</width>
+                       <height>16777215</height>
+                      </size>
+                     </property>
+                     <property name="maximum">
+                      <number>100</number>
+                     </property>
+                     <property name="value">
+                      <number>0</number>
+                     </property>
+                     <property name="sliderPosition">
+                      <number>0</number>
+                     </property>
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
                   <layout class="QGridLayout" name="gridLayout_13">
                    <property name="spacing">
                     <number>0</number>
@@ -4500,7 +4916,7 @@ QGroupBox::indicator:checked:disabled {
                     </widget>
                    </item>
                    <item>
-                    <widget class="QComboBox" name="comboBoxDenoiseWindow">
+                    <widget class="NoScrollComboBox" name="comboBoxDenoiseWindow">
                      <property name="font">
                       <font>
                        <pointsize>10</pointsize>
@@ -5242,6 +5658,88 @@ QGroupBox::indicator:checked:disabled {
                   <layout class="QHBoxLayout" name="horizontalLayout_40">
                    <item>
                     <widget class="HueVsDiagram" name="labelHueVsLuma">
+                     <property name="text">
+                      <string>Place holder for curves</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="Line" name="line_28">
+                   <property name="styleSheet">
+                    <string notr="true">background-color: rgb(115, 115, 115);</string>
+                   </property>
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <layout class="QHBoxLayout" name="horizontalLayout_43">
+                   <property name="spacing">
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QLabel" name="label_lumaVsSat">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>Luminance vs. Saturation</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_59">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButtonLumaVsSatReset">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="toolTip">
+                      <string>Reset current curve</string>
+                     </property>
+                     <property name="text">
+                      <string/>
+                     </property>
+                     <property name="icon">
+                      <iconset resource="ressources.qrc">
+                       <normaloff>:/RetinaIMG/RetinaIMG/Reload-icon-2.png</normaloff>:/RetinaIMG/RetinaIMG/Reload-icon-2.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>12</width>
+                       <height>12</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <layout class="QHBoxLayout" name="horizontalLayout_44">
+                   <item>
+                    <widget class="HueVsDiagram" name="labelLumaVsSat">
                      <property name="text">
                       <string>Place holder for curves</string>
                      </property>
@@ -6465,7 +6963,7 @@ QGroupBox::indicator:checked:disabled {
                     </widget>
                    </item>
                    <item>
-                    <widget class="QSpinBox" name="spinBoxGradientX">
+                    <widget class="NoScrollSpinBox" name="spinBoxGradientX">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -6476,6 +6974,9 @@ QGroupBox::indicator:checked:disabled {
                       <font>
                        <pointsize>10</pointsize>
                       </font>
+                     </property>
+                     <property name="focusPolicy">
+                      <enum>Qt::ClickFocus</enum>
                      </property>
                      <property name="alignment">
                       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -6498,7 +6999,7 @@ QGroupBox::indicator:checked:disabled {
                     </widget>
                    </item>
                    <item>
-                    <widget class="QSpinBox" name="spinBoxGradientY">
+                    <widget class="NoScrollSpinBox" name="spinBoxGradientY">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -6509,6 +7010,9 @@ QGroupBox::indicator:checked:disabled {
                       <font>
                        <pointsize>10</pointsize>
                       </font>
+                     </property>
+                     <property name="focusPolicy">
+                      <enum>Qt::ClickFocus</enum>
                      </property>
                      <property name="alignment">
                       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -6597,7 +7101,7 @@ QGroupBox::indicator:checked:disabled {
                     </widget>
                    </item>
                    <item>
-                    <widget class="QSpinBox" name="spinBoxGradientLength">
+                    <widget class="NoScrollSpinBox" name="spinBoxGradientLength">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -6608,6 +7112,9 @@ QGroupBox::indicator:checked:disabled {
                       <font>
                        <pointsize>10</pointsize>
                       </font>
+                     </property>
+                     <property name="focusPolicy">
+                      <enum>Qt::ClickFocus</enum>
                      </property>
                      <property name="alignment">
                       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -7053,7 +7560,7 @@ QGroupBox::indicator:checked:disabled {
                   </widget>
                  </item>
                  <item>
-                  <widget class="QComboBox" name="comboBoxFilterName">
+                  <widget class="NoScrollComboBox" name="comboBoxFilterName">
                    <property name="enabled">
                     <bool>true</bool>
                    </property>
@@ -7704,6 +8211,196 @@ QGroupBox::indicator:checked:disabled {
                    </item>
                   </layout>
                  </item>
+                 <item>
+                  <widget class="Line" name="line_29">
+                   <property name="styleSheet">
+                    <string notr="true">background-color: rgb(115, 115, 115);</string>
+                   </property>
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <layout class="QGridLayout" name="gridLayout_65">
+                   <property name="spacing">
+                    <number>0</number>
+                   </property>
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_CaDesaturateText">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>CA Desaturate Threshold</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <spacer name="horizontalSpacer_60">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeType">
+                      <enum>QSizePolicy::Maximum</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item row="0" column="2">
+                    <widget class="DoubleClickLabel" name="label_CaDesaturateVal">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="contextMenuPolicy">
+                      <enum>Qt::CustomContextMenu</enum>
+                     </property>
+                     <property name="layoutDirection">
+                      <enum>Qt::RightToLeft</enum>
+                     </property>
+                     <property name="text">
+                      <string>0</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0" colspan="3">
+                    <widget class="NoScrollSlider" name="horizontalSliderCaDesaturate">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize">
+                      <size>
+                       <width>0</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>16777215</width>
+                       <height>16777215</height>
+                      </size>
+                     </property>
+                     <property name="minimum">
+                      <number>0</number>
+                     </property>
+                     <property name="maximum">
+                      <number>100</number>
+                     </property>
+                     <property name="value">
+                      <number>0</number>
+                     </property>
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <layout class="QGridLayout" name="gridLayout_66">
+                   <property name="spacing">
+                    <number>0</number>
+                   </property>
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_CaRadiusText">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>CA Radius</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <spacer name="horizontalSpacer_61">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeType">
+                      <enum>QSizePolicy::Maximum</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item row="0" column="2">
+                    <widget class="DoubleClickLabel" name="label_CaRadiusVal">
+                     <property name="font">
+                      <font>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="contextMenuPolicy">
+                      <enum>Qt::CustomContextMenu</enum>
+                     </property>
+                     <property name="layoutDirection">
+                      <enum>Qt::RightToLeft</enum>
+                     </property>
+                     <property name="text">
+                      <string>1</string>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0" colspan="3">
+                    <widget class="NoScrollSlider" name="horizontalSliderCaRadius">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="minimumSize">
+                      <size>
+                       <width>0</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>16777215</width>
+                       <height>16777215</height>
+                      </size>
+                     </property>
+                     <property name="minimum">
+                      <number>1</number>
+                     </property>
+                     <property name="maximum">
+                      <number>20</number>
+                     </property>
+                     <property name="value">
+                      <number>1</number>
+                     </property>
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
                 </layout>
                </widget>
               </item>
@@ -7968,7 +8665,7 @@ QGroupBox::indicator:checked:disabled {
                     </layout>
                    </item>
                    <item row="0" column="1">
-                    <widget class="QComboBox" name="comboBoxHStretch">
+                    <widget class="NoScrollComboBox" name="comboBoxHStretch">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -8294,7 +8991,7 @@ QGroupBox::indicator:checked:disabled {
                       </font>
                      </property>
                      <property name="toolTip">
-                      <string>Visible only after ffmpeg export!</string>
+                      <string>Visible only after ffmpeg H.264 export!</string>
                      </property>
                      <property name="text">
                       <string>Enable FFmpeg vid.stab</string>
@@ -8302,7 +8999,7 @@ QGroupBox::indicator:checked:disabled {
                     </widget>
                    </item>
                    <item row="1" column="1">
-                    <widget class="QComboBox" name="comboBoxVStretch">
+                    <widget class="NoScrollComboBox" name="comboBoxVStretch">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -9377,6 +10074,44 @@ QGroupBox::indicator:checked:disabled {
     <string>Alt+M</string>
    </property>
   </action>
+  <action name="actionBetterResizer">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Better Resizer for Viewer</string>
+   </property>
+  </action>
+  <action name="actionShowInstalledFocusPixelMaps">
+   <property name="text">
+    <string>Show Installed Focus Pixel Maps</string>
+   </property>
+  </action>
+  <action name="actionUseAhdDebayer">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>AHD</string>
+   </property>
+  </action>
+  <action name="actionDontSwitchDebayerForPlayback">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Don't Switch Debayer for Playback</string>
+   </property>
+  </action>
+  <action name="actionTranscodeAndImport">
+   <property name="icon">
+    <iconset resource="ressources.qrc">
+     <normaloff>:/RetinaIMG/RetinaIMG/Movie-import-icon.png</normaloff>:/RetinaIMG/RetinaIMG/Movie-import-icon.png</iconset>
+   </property>
+   <property name="text">
+    <string>Transcode and Import</string>
+   </property>
+  </action>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <customwidgets>
@@ -9429,6 +10164,16 @@ QGroupBox::indicator:checked:disabled {
    <class>ScopesLabel</class>
    <extends>QLabel</extends>
    <header>ScopesLabel.h</header>
+  </customwidget>
+  <customwidget>
+   <class>NoScrollSpinBox</class>
+   <extends>QSpinBox</extends>
+   <header>NoScrollSpinBox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>NoScrollComboBox</class>
+   <extends>QComboBox</extends>
+   <header>NoScrollComboBox.h</header>
   </customwidget>
  </customwidgets>
  <tabstops>

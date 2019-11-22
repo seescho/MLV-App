@@ -30,6 +30,7 @@ ReceiptSettings::ReceiptSettings()
     m_hueVsHue = QString( "0;0;1;0;" );
     m_hueVsSat = QString( "0;0;1;0;" );
     m_hueVsLuma = QString( "0;0;1;0;" );
+    m_lumaVsSat = QString( "0;0;1;0;" );
 
     m_isGradientEnabled = false;
     m_gradientExposure = 0;
@@ -40,6 +41,7 @@ ReceiptSettings::ReceiptSettings()
     m_gradientAngle = 0;
 
     m_sharpen = 0;
+    m_shMasking = 0;
     m_chromaBlur = 0;
     m_denoiserWindow = 3;
     m_denoiserStrength = 0;
@@ -90,8 +92,13 @@ ReceiptSettings::ReceiptSettings()
     m_vignetteShape = 0;
     m_caRed = 0;
     m_caBlue = 0;
-    m_profile = 1;
-    m_creativeAdjustments = 0;
+    m_caDesaturate = 0;
+    m_caRadius = 1;
+    m_profile = 2;
+    m_tonemap = -1;
+    m_gamut = -1;
+    m_gamma = 315;
+    m_creativeAdjustments = 1;
     m_rawWhite = -1;
     m_rawBlack = -1;
     m_tone = 0;

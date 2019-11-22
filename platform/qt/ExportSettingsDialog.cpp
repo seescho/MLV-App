@@ -29,7 +29,7 @@ struct ExportPreset {
     bool exportAudio;
     bool heightLocked;
     uint8_t smooth;
-    uint8_t scaleAlgo;
+    uint8_t scaleAlgo; //not used
     bool hdrBlending;
 };
 
@@ -48,7 +48,7 @@ QDataStream& operator<<(QDataStream& out, const ExportPreset& v) {
         << v.exportAudio
         << v.heightLocked
         << v.smooth
-        << v.scaleAlgo
+        << v.scaleAlgo //not used
         << v.hdrBlending;
     return out;
 }
@@ -66,7 +66,7 @@ QDataStream& operator>>(QDataStream& in, ExportPreset& v) {
     in >> v.exportAudio;
     in >> v.heightLocked;
     in >> v.smooth;
-    in >> v.scaleAlgo;
+    in >> v.scaleAlgo;  //not used
     in >> v.hdrBlending;
     return in;
 }
@@ -79,7 +79,7 @@ bool exportPresetLessThan(const ExportPreset &v1, const ExportPreset &v2)
 //Until here for Preset Saving
 
 //Constructor
-ExportSettingsDialog::ExportSettingsDialog(QWidget *parent, Scripting *scripting, uint8_t currentCodecProfile, uint8_t currentCodecOption, uint8_t debayerMode, bool resize, uint16_t resizeWidth, uint16_t resizeHeight, bool fpsOverride, double fps, bool exportAudio, bool heightLocked, uint8_t smooth, uint8_t scaleAlgo, bool hdrBlending) :
+ExportSettingsDialog::ExportSettingsDialog(QWidget *parent, Scripting *scripting, uint8_t currentCodecProfile, uint8_t currentCodecOption, uint8_t debayerMode, bool resize, uint16_t resizeWidth, uint16_t resizeHeight, bool fpsOverride, double fps, bool exportAudio, bool heightLocked, uint8_t smooth, bool hdrBlending) :
     QDialog(parent),
     ui(new Ui::ExportSettingsDialog)
 {
@@ -100,10 +100,9 @@ ExportSettingsDialog::ExportSettingsDialog(QWidget *parent, Scripting *scripting
     ui->checkBoxExportAudio->setChecked( exportAudio );
     ui->toolButtonLockHeight->setChecked( heightLocked );
     ui->comboBoxSmoothing->setCurrentIndex( smooth );
-    ui->comboBoxScaleAlgorithm->setCurrentIndex( scaleAlgo );
     ui->checkBoxHdrBlending->setChecked( hdrBlending );
 
-    //Disable resize for AVFoundation
+    //Disable some options for AVFoundation
     if( ui->comboBoxOption->currentText() == QString( "Apple AVFoundation" ) )
     {
         on_comboBoxOption_currentIndexChanged( QString( "Apple AVFoundation" ) );
@@ -209,12 +208,6 @@ uint8_t ExportSettingsDialog::smoothSetting()
     return ui->comboBoxSmoothing->currentIndex();
 }
 
-//Get the selected scaling algorithm
-uint8_t ExportSettingsDialog::scaleAlgorithm()
-{
-    return ui->comboBoxScaleAlgorithm->currentIndex();
-}
-
 bool ExportSettingsDialog::hdrBlending()
 {
     return ui->checkBoxHdrBlending->isChecked();
@@ -300,6 +293,14 @@ void ExportSettingsDialog::on_comboBoxCodec_currentIndexChanged(int index)
             ui->comboBoxOption->addItem( QString( "Apple AVFoundation" ) );
         }
 #endif
+    }
+    else if( index == CODEC_TIFF )
+    {
+        ui->labelDebayer->setEnabled( true );
+        ui->comboBoxDebayer->setEnabled( true );
+        ui->comboBoxOption->setEnabled( true );
+        ui->comboBoxOption->addItem( QString( "Sequence" ) );
+        ui->comboBoxOption->addItem( QString( "Averaged Frame (max. 128 frames)" ) );
     }
     else if( index == CODEC_PNG )
     {
@@ -396,12 +397,11 @@ void ExportSettingsDialog::on_comboBoxCodec_currentIndexChanged(int index)
         on_checkBoxHdrBlending_toggled( false );
     }
     ui->checkBoxResize->setEnabled( enableResize );
-    ui->comboBoxScaleAlgorithm->setEnabled( enableResize );
+    on_comboBoxSmoothing_currentIndexChanged( ui->comboBoxSmoothing->currentIndex() );
+    on_checkBoxHdrBlending_toggled( ui->checkBoxHdrBlending->isChecked() );
     ui->comboBoxSmoothing->setEnabled( enableResize );
     ui->label_Smoothing->setEnabled( enableResize );
     ui->checkBoxHdrBlending->setEnabled( enableResize );
-    on_comboBoxSmoothing_currentIndexChanged( ui->comboBoxSmoothing->currentIndex() );
-    on_checkBoxHdrBlending_toggled( ui->checkBoxHdrBlending->isChecked() );
 
     //En-/disable fps override
     if( ( index == CODEC_MLV ) || ( index == CODEC_TIFF ) || ( index == CODEC_PNG ) || ( index == CODEC_JPG2K ) || ( index == CODEC_AUDIO_ONLY ) )
@@ -439,13 +439,11 @@ void ExportSettingsDialog::on_checkBoxResize_toggled(bool checked)
     else ui->spinBoxHeight->setEnabled( false );
 }
 
-//Disable audio & resize for AVFoundation
+//Disable some options for AVFoundation
 void ExportSettingsDialog::on_comboBoxOption_currentIndexChanged(const QString &arg1)
 {
     if( arg1 == QString( "Apple AVFoundation" ) )
     {
-        ui->checkBoxResize->setChecked( false );
-        ui->checkBoxResize->setEnabled( false );
         ui->comboBoxSmoothing->setCurrentIndex( 0 );
         ui->comboBoxSmoothing->setEnabled( false );
         ui->label_Smoothing->setEnabled( false );
@@ -474,6 +472,7 @@ void ExportSettingsDialog::on_comboBoxOption_currentIndexChanged(const QString &
         //En-/disable fps override
         if( ( ( ui->comboBoxCodec->currentIndex() == CODEC_JPG2K )
              && ( arg1 != QString( "Movie (*.mov)" ) ) )
+         || ( ui->comboBoxCodec->currentIndex() == CODEC_TIFF )
          || ( ui->comboBoxCodec->currentIndex() == CODEC_PNG ) )
         {
             ui->checkBoxFpsOverride->setEnabled( false );
@@ -552,7 +551,7 @@ void ExportSettingsDialog::on_toolButtonAddPreset_clicked()
     preset.exportAudio = ui->checkBoxExportAudio->isChecked();
     preset.heightLocked = ui->toolButtonLockHeight->isChecked();
     preset.smooth = ui->comboBoxSmoothing->currentIndex();
-    preset.scaleAlgo = ui->comboBoxScaleAlgorithm->currentIndex();
+    preset.scaleAlgo = 0; //not used
     preset.hdrBlending = ui->checkBoxHdrBlending->isChecked();
     //Save item + list
     presetList.append( preset );
@@ -624,7 +623,7 @@ void ExportSettingsDialog::on_listWidget_itemClicked(QListWidgetItem *item)
     ui->checkBoxExportAudio->setChecked( presetList.at(currentItem).exportAudio );
     ui->toolButtonLockHeight->setChecked( presetList.at(currentItem).heightLocked );
     ui->comboBoxSmoothing->setCurrentIndex( presetList.at(currentItem).smooth );
-    ui->comboBoxScaleAlgorithm->setCurrentIndex( presetList.at(currentItem).scaleAlgo );
+    //... presetList.at(currentItem).scaleAlgo ... //not used
     ui->checkBoxHdrBlending->setChecked( presetList.at(currentItem).hdrBlending );
 }
 
